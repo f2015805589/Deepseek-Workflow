@@ -63,6 +63,16 @@ const fsRevertBridge = Object.freeze({
   apply: (sessionId, fromTurn, toTurn) => ipcRenderer.invoke('dsh-desktop:fs-revert:apply', sessionId, fromTurn, toTurn),
 })
 
+// File-changes panel bridge: per-session pending file changes with +N/-N diff
+// stats, plus per-file / all-file revert (restore) and save (accept) actions.
+const fsChangesBridge = Object.freeze({
+  list: (sessionId) => ipcRenderer.invoke('dsh-desktop:fs-changes:list', sessionId),
+  revert: (sessionId, targetKey) => ipcRenderer.invoke('dsh-desktop:fs-changes:revert', sessionId, targetKey),
+  save: (sessionId, targetKey) => ipcRenderer.invoke('dsh-desktop:fs-changes:save', sessionId, targetKey),
+  revertAll: (sessionId) => ipcRenderer.invoke('dsh-desktop:fs-changes:revert-all', sessionId),
+  saveAll: (sessionId) => ipcRenderer.invoke('dsh-desktop:fs-changes:save-all', sessionId),
+})
+
 // In-place conversation-edit bridge: replaces one user message on the model
 // surface in the SAME session (no fork), and resolves the fork anchor for the
 // edit-and-resend path (the turn/end BEFORE the edited message's turn).
@@ -77,5 +87,6 @@ contextBridge.exposeInMainWorld('dshDesktop', Object.freeze({
   plugins: pluginsBridge,
   settings: settingsBridge,
   fsRevert: fsRevertBridge,
+  fsChanges: fsChangesBridge,
   conversationEdit: conversationEditBridge,
 }))

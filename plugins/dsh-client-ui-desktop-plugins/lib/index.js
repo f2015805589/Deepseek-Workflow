@@ -18,6 +18,85 @@ export const COMPACTION_THRESHOLD_MIN = 0.1
 export const COMPACTION_THRESHOLD_MAX = 0.9
 
 /**
+ * The per-session fs-mutation journal shared by the fs-revert gateway and the
+ * file-changes panel. `sessionId -> Map<turn, Map<targetKey, snapshot>>` where
+ * each snapshot is the file's PRE-mutation state at its first touch of that
+ * turn: `{ target, path, existed, content }`. Module-level so the pure
+ * aggregation helpers are unit-testable without booting the profile.
+ */
+export const fsJournals = new Map()
+
+/**
+ * Simple line diff: additions/deletions between two texts. Bounded LCS DP;
+ * beyond the cell cap, raw line counts are reported (an approximation that
+ * never under-reports either direction).
+ * @param oldText - the baseline text.
+ * @param newText - the current text.
+ * @returns `{ additions, deletions }` in lines.
+ */
+export function lineDiff(oldText, newText) {
+  const a = String(oldText ?? '').split(/\r?\n/)
+  const b = String(newText ?? '').split(/\r?\n/)
+  if (a[a.length - 1] === '') a.pop()
+  if (b[b.length - 1] === '') b.pop()
+  if (a.length === 0) return { additions: b.length, deletions: 0 }
+  if (b.length === 0) return { additions: 0, deletions: a.length }
+  if (a.length * b.length > 1_000_000) return { additions: b.length, deletions: a.length }
+  const n = a.length
+  const m = b.length
+  const width = m + 1
+  const dp = new Uint32Array((n + 1) * width)
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i * width + j] = a[i] === b[j]
+        ? dp[(i + 1) * width + j + 1] + 1
+        : Math.max(dp[(i + 1) * width + j], dp[i * width + j + 1])
+    }
+  }
+  let i = 0
+  let j = 0
+  let additions = 0
+  let deletions = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      i++
+      j++
+    } else if (dp[(i + 1) * width + j] >= dp[i * width + j + 1]) {
+      i++
+      deletions++
+    } else {
+      j++
+      additions++
+    }
+  }
+  additions += m - j
+  deletions += n - i
+  return { additions, deletions }
+}
+
+/**
+ * Baseline snapshots of every pending file of one session. The EARLIEST turn
+ * wins per file: its snapshot is the state before ANY of the session's
+ * changes to that file (first mutation of the file in the earliest turn).
+ * @param journals - the shared fs journal (see {@link fsJournals}).
+ * @param sessionId - the session id.
+ * @returns `Map<targetKey, snapshot>` in earliest-turn order.
+ */
+export function pendingFilesOf(journals, sessionId) {
+  const files = new Map()
+  const bySession = journals.get(sessionId)
+  if (!bySession) return files
+  for (const turn of [...bySession.keys()].sort((left, right) => left - right)) {
+    const turnFiles = bySession.get(turn)
+    if (!turnFiles) continue
+    for (const [targetKey, snapshot] of turnFiles) {
+      if (!files.has(targetKey)) files.set(targetKey, snapshot)
+    }
+  }
+  return files
+}
+
+/**
  * Resolve the fork anchor for an edit-and-resend: the seq of the `turn/end`
  * of the completed turn BEFORE the one containing `messageSeq`. The wire
  * `session.fork` cuts at the first `turn/end` at or after its `atSeq`, so
@@ -145,8 +224,9 @@ export function apply(ctx) {
   })
 
   // ── per-turn fs mutation journal ───────────────────────────────────────────
-  /** sessionId -> Map<turn, Map<targetKey, { target, path, existed, content }>> */
-  const journals = new Map()
+  // The map itself lives at module level (fsJournals) so the pure aggregation
+  // helpers are unit-testable; this apply binds the local name for brevity.
+  const journals = fsJournals
   /** sessionId -> current turn index, advanced on user/message events. */
   const turnBySession = new Map()
   /** True while the revert gateway is writing restored content back. */
@@ -275,6 +355,119 @@ export function apply(ctx) {
     return { restored }
   }
 
+  // ── per-session file-changes panel (right-side dock) ──────────────────────
+  // Backed by the same journal: for every file the session touched, the
+  // EARLIEST snapshot across its turns IS the pre-change baseline (first
+  // mutation of the file in the earliest turn wins). The panel diffs that
+  // baseline against the file's CURRENT disk content and reports +N / -N
+  // lines; 保存 accepts the current state (drops the pending entry), 撤销
+  // restores the baseline.
+
+  /** Summarize one session's pending file changes with diff stats. */
+  async function changesList(sessionId) {
+    const rows = []
+    for (const [targetKey, snapshot] of pendingFilesOf(journals, sessionId)) {
+      let current = ''
+      let currentExists = true
+      try {
+        const info = await ctx.fs.stat(snapshot.target)
+        if (info === undefined) {
+          currentExists = false
+        } else {
+          current = await ctx.fs.readText(snapshot.target)
+        }
+      } catch {
+        currentExists = false
+      }
+      const { additions, deletions } = lineDiff(
+        snapshot.existed ? snapshot.content : '',
+        current,
+      )
+      if (additions === 0 && deletions === 0) continue
+      rows.push({
+        targetKey,
+        path: snapshot.path ?? String(targetKey),
+        existed: snapshot.existed,
+        currentExists,
+        additions,
+        deletions,
+      })
+    }
+    rows.sort((left, right) => String(left.path).localeCompare(String(right.path)))
+    return { ok: true, rows }
+  }
+
+  /** Restore one file to its pre-change baseline and drop its pending entries. */
+  async function revertFile(sessionId, targetKey) {
+    const snapshot = pendingFilesOf(journals, sessionId).get(targetKey)
+    if (!snapshot) return { ok: false, error: 'file-not-found' }
+    restoring = true
+    try {
+      if (snapshot.existed) {
+        await ctx.fs.writeText(snapshot.target, snapshot.content)
+      } else if (snapshot.path !== undefined) {
+        // The file did not exist before the session touched it: revert = delete it.
+        unlinkSync(snapshot.path)
+      }
+    } finally {
+      restoring = false
+    }
+    dropFileEntries(sessionId, targetKey)
+    return { ok: true }
+  }
+
+  /** Accept one file's current state: drop its pending entries (no disk write). */
+  function saveFile(sessionId, targetKey) {
+    return dropFileEntries(sessionId, targetKey)
+      ? { ok: true }
+      : { ok: false, error: 'file-not-found' }
+  }
+
+  /** Remove every journal entry of one file across all turns; true when any existed. */
+  function dropFileEntries(sessionId, targetKey) {
+    const bySession = journals.get(sessionId)
+    if (!bySession) return false
+    let removed = false
+    for (const turn of [...bySession.keys()]) {
+      const turnFiles = bySession.get(turn)
+      if (!turnFiles) continue
+      if (turnFiles.delete(targetKey)) removed = true
+      if (turnFiles.size === 0) bySession.delete(turn)
+    }
+    return removed
+  }
+
+  /** Restore every pending file to its pre-change baseline and clear the journal. */
+  async function revertAllFiles(sessionId) {
+    const snapshots = [...pendingFilesOf(sessionId).values()]
+    restoring = true
+    let restored = 0
+    try {
+      for (const snapshot of snapshots) {
+        try {
+          if (snapshot.existed) {
+            await ctx.fs.writeText(snapshot.target, snapshot.content)
+          } else if (snapshot.path !== undefined) {
+            unlinkSync(snapshot.path)
+          }
+          restored += 1
+        } catch {
+          // The user may have moved or deleted a file since; keep going.
+        }
+      }
+    } finally {
+      restoring = false
+    }
+    journals.delete(sessionId)
+    return { ok: true, restored }
+  }
+
+  /** Accept every pending change: clear the session journal (no disk write). */
+  function saveAllFiles(sessionId) {
+    journals.delete(sessionId)
+    return { ok: true }
+  }
+
   // The revert and conversation-edit gateways ride the main process (this
   // plugin runs inside the desktop main's profile boot). Under plain-Node
   // probe/e2e boots the electron package resolves to its binary-path shim:
@@ -288,6 +481,25 @@ export function apply(ctx) {
       }
       return revertSession(sessionId, fromTurn, typeof toTurn === 'number' ? toTurn : fromTurn)
     })
+    const requireSessionId = (value) => {
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error('dsh desktop: invalid session payload')
+      }
+      return value
+    }
+    const requireFileId = (value) => {
+      if (typeof value !== 'string' || value.length === 0) {
+        throw new Error('dsh desktop: invalid file payload')
+      }
+      return value
+    }
+    ipcMain.handle('dsh-desktop:fs-changes:list', (_event, sessionId) => changesList(requireSessionId(sessionId)))
+    ipcMain.handle('dsh-desktop:fs-changes:revert', (_event, sessionId, targetKey) =>
+      revertFile(requireSessionId(sessionId), requireFileId(targetKey)))
+    ipcMain.handle('dsh-desktop:fs-changes:save', (_event, sessionId, targetKey) =>
+      saveFile(requireSessionId(sessionId), requireFileId(targetKey)))
+    ipcMain.handle('dsh-desktop:fs-changes:revert-all', (_event, sessionId) => revertAllFiles(requireSessionId(sessionId)))
+    ipcMain.handle('dsh-desktop:fs-changes:save-all', (_event, sessionId) => saveAllFiles(requireSessionId(sessionId)))
     ipcMain.handle('dsh-desktop:conversation-edit:apply', (_event, sessionId, messageId, text) => {
       if (typeof sessionId !== 'string' || sessionId.length === 0
         || typeof messageId !== 'string' || messageId.length === 0

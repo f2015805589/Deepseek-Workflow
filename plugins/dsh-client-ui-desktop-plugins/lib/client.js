@@ -808,6 +808,284 @@ window.__ModuleLoader__.load({
 			);
 		}
 
+		/** The last path segment of an absolute path (handles / and \). */
+		function basenameOf(path) {
+			const cleaned = String(path).replace(/[\\/]+$/, "");
+			const index = Math.max(cleaned.lastIndexOf("/"), cleaned.lastIndexOf("\\"));
+			return index === -1 ? cleaned : cleaned.slice(index + 1);
+		}
+
+		/** The directory part of an absolute path, for the muted sub-line. */
+		function dirnameOf(path) {
+			const cleaned = String(path).replace(/[\\/]+$/, "");
+			const index = Math.max(cleaned.lastIndexOf("/"), cleaned.lastIndexOf("\\"));
+			return index === -1 ? "" : cleaned.slice(0, index);
+		}
+
+		/** Right-side "文件改动" dock (rides the frame-wide shell.overlay seat):
+		 *  the current session's pending file changes, top to bottom, each with
+		 *  +N (green) / -N (red) line stats, per-file 撤销/保存, and a top-level
+		 *  一键撤销 / 一键保存. Only appears while the current session has
+		 *  pending changes; auto-opens on first appearance and collapses to a
+		 *  small tab. */
+		function FileChangesPanel({ useSessions }) {
+			const fsChanges = bridge() && window.dshDesktop.fsChanges;
+			const sessionId = useSessions ? useSessions(snapshot => snapshot.current) : undefined;
+			const [rows, setRows] = useState(null);
+			const [open, setOpen] = useState(false);
+			const [busy, setBusy] = useState(false);
+			const [notice, setNotice] = useState("");
+
+			const refresh = useCallback(() => {
+				if (!fsChanges || !sessionId) { setRows(null); return; }
+				fsChanges.list(sessionId).then(
+					(result) => {
+						setRows(result && result.ok === false ? null : (result && Array.isArray(result.rows) ? result.rows : []));
+					},
+					() => { setRows(null); },
+				);
+			}, [fsChanges, sessionId]);
+
+			useEffect(() => {
+				refresh();
+				if (!fsChanges || !sessionId) return undefined;
+				const timer = window.setInterval(refresh, 2000);
+				return () => window.clearInterval(timer);
+			}, [refresh, fsChanges, sessionId]);
+
+			const pending = rows === null ? 0 : rows.length;
+
+			// Auto-open the dock when changes first appear (then let the user
+			// collapse it to the tab).
+			const hadPending = useRef(false);
+			useEffect(() => {
+				if (pending > 0 && !hadPending.current) {
+					hadPending.current = true;
+					setOpen(true);
+				}
+				if (pending === 0) hadPending.current = false;
+			}, [pending]);
+
+			const flash = (text) => {
+				setNotice(text);
+				window.setTimeout(() => { setNotice(""); }, 3000);
+			};
+
+			const act = (promise) => {
+				setBusy(true);
+				promise.then(
+					(result) => {
+						if (result && result.ok === false) flash(result.error || "操作失败");
+						else refresh();
+						setBusy(false);
+					},
+					(error) => {
+						flash(String((error && error.message) || error));
+						setBusy(false);
+					},
+				);
+			};
+
+			const revertOne = (row) => { act(fsChanges.revert(sessionId, row.targetKey)); };
+			const saveOne = (row) => { act(fsChanges.save(sessionId, row.targetKey)); };
+			const revertAll = () => {
+				if (!window.confirm(`撤销全部 ${pending} 个文件的修改？`)) return;
+				act(fsChanges.revertAll(sessionId));
+			};
+			const saveAll = () => { act(fsChanges.saveAll(sessionId)); };
+
+			const panelStyle = {
+				position: "fixed",
+				top: "72px",
+				right: "12px",
+				width: "340px",
+				maxHeight: "calc(100vh - 140px)",
+				display: "flex",
+				flexDirection: "column",
+				boxSizing: "border-box",
+				background: "var(--dsw-bg, #ffffff)",
+				color: "var(--dsw-text, inherit)",
+				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				borderRadius: "12px",
+				boxShadow: "0 8px 28px rgba(0,0,0,.18)",
+				zIndex: 1200,
+				overflow: "hidden",
+				pointerEvents: "auto",
+			};
+			const tabStyle = {
+				position: "fixed",
+				top: "80px",
+				right: "0",
+				zIndex: 1200,
+				fontSize: "12px",
+				lineHeight: 1,
+				padding: "8px 10px",
+				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				borderRight: "none",
+				borderRadius: "10px 0 0 10px",
+				background: "var(--dsw-bg, #ffffff)",
+				color: "var(--dsw-accent, #4d9fff)",
+				cursor: "pointer",
+				pointerEvents: "auto",
+			};
+			const headerStyle = {
+				display: "flex",
+				alignItems: "center",
+				gap: "8px",
+				padding: "10px 12px",
+				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.2))",
+				flex: "none",
+			};
+			const headerTitleStyle = { fontWeight: 600, fontSize: "13px", marginRight: "auto", whiteSpace: "nowrap" };
+			const dangerButtonStyle = {
+				fontSize: "12px",
+				lineHeight: 1,
+				padding: "4px 10px",
+				border: "1px solid rgba(229,72,77,.5)",
+				borderRadius: "6px",
+				background: "transparent",
+				color: "#e5484d",
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+			};
+			const okButtonStyle = {
+				fontSize: "12px",
+				lineHeight: 1,
+				padding: "4px 10px",
+				border: "1px solid var(--dsw-accent, #4d9fff)",
+				borderRadius: "6px",
+				background: "transparent",
+				color: "var(--dsw-accent, #4d9fff)",
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+			};
+			const closeButtonStyle = {
+				fontSize: "14px",
+				lineHeight: 1,
+				padding: "2px 6px",
+				border: "none",
+				background: "transparent",
+				color: "var(--dsw-text-muted, #8b8b93)",
+				cursor: "pointer",
+			};
+			const rowStyle = {
+				display: "flex",
+				alignItems: "center",
+				gap: "8px",
+				padding: "7px 8px",
+				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.12))",
+			};
+			const nameStyle = { flex: "1 1 auto", minWidth: 0, overflow: "hidden" };
+			const fileNameStyle = { fontSize: "13px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+			const fileDirStyle = { fontSize: "11px", color: "var(--dsw-text-muted, #8b8b93)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+			const statsStyle = { display: "flex", gap: "6px", flex: "none", fontSize: "12px", fontVariantNumeric: "tabular-nums" };
+			const addStyle = { color: "#2f9e44", fontWeight: 600 };
+			const delStyle = { color: "#e5484d", fontWeight: 600 };
+			const smallButtonStyle = {
+				fontSize: "11px",
+				lineHeight: 1,
+				padding: "3px 8px",
+				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				borderRadius: "6px",
+				background: "transparent",
+				color: "var(--dsw-text-muted, #8b8b93)",
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+			};
+			const noticeStyle = {
+				fontSize: "11px",
+				padding: "4px 12px",
+				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.12))",
+				color: "#e5484d",
+				flex: "none",
+			};
+
+			if (!fsChanges || pending === 0) return null;
+
+			if (!open) {
+				return React.createElement(
+					"button",
+					{ type: "button", style: tabStyle, title: "显示文件改动", onClick: () => setOpen(true) },
+					`改动 ${pending}`,
+				);
+			}
+
+			return React.createElement(
+				"div",
+				{ style: panelStyle },
+				React.createElement(
+					"div",
+					{ style: headerStyle },
+					React.createElement("span", { style: headerTitleStyle }, `文件改动 (${pending})`),
+					React.createElement("button", {
+						type: "button",
+						style: dangerButtonStyle,
+						disabled: busy,
+						title: "把全部文件还原到改动前的状态",
+						onClick: revertAll,
+					}, "一键撤销"),
+					React.createElement("button", {
+						type: "button",
+						style: okButtonStyle,
+						disabled: busy,
+						title: "保留全部改动（移出待处理列表）",
+						onClick: saveAll,
+					}, "一键保存"),
+					React.createElement("button", {
+						type: "button",
+						style: closeButtonStyle,
+						title: "收起",
+						onClick: () => setOpen(false),
+					}, "×"),
+				),
+				notice !== ""
+					? React.createElement("div", { style: noticeStyle }, notice)
+					: null,
+				React.createElement(
+					"div",
+					{ style: { flex: "1 1 auto", overflowY: "auto", padding: "4px 6px" } },
+					rows.map((row) => {
+						const name = basenameOf(row.path);
+						const dir = dirnameOf(row.path);
+						return React.createElement(
+							"div",
+							{ key: row.targetKey, style: rowStyle, title: row.path },
+							React.createElement(
+								"div",
+								{ style: nameStyle },
+								React.createElement("div", { style: fileNameStyle }, name),
+								React.createElement("div", { style: fileDirStyle }, dir),
+							),
+							React.createElement(
+								"div",
+								{ style: statsStyle },
+								row.additions > 0
+									? React.createElement("span", { style: addStyle }, `+${row.additions}`)
+									: null,
+								row.deletions > 0
+									? React.createElement("span", { style: delStyle }, `-${row.deletions}`)
+									: null,
+							),
+							React.createElement("button", {
+								type: "button",
+								style: smallButtonStyle,
+								disabled: busy,
+								title: "还原此文件到改动前的状态",
+								onClick: () => revertOne(row),
+							}, "撤销"),
+							React.createElement("button", {
+								type: "button",
+								style: { ...smallButtonStyle, color: "var(--dsw-accent, #4d9fff)" },
+								disabled: busy,
+								title: "保留此文件的改动（移出待处理列表）",
+								onClick: () => saveOne(row),
+							}, "保存"),
+						);
+					}),
+				),
+			);
+		}
+
 		/** Register the manager tab and the compaction threshold control. */
 		function apply(ctx) {
 			ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
@@ -834,6 +1112,17 @@ window.__ModuleLoader__.load({
 				priority: 20,
 				select: () => true,
 			}, TurnRevertAction));
+
+			// Right-side file-changes dock: the frame-wide shell.overlay seat is
+			// a root-scope additive list — a fresh id joins beside the shipped
+			// entries instead of replacing anything. The panel reads the current
+			// session through the global useSessions hook and drives the
+			// window.dshDesktop.fsChanges preload bridge.
+			ctx.slots.inject("shell.overlay", () => ctx.slots.register({
+				name: "shell.overlay",
+				id: "fs-changes",
+				order: 20,
+			}, FileChangesPanel));
 
 			// Cursor-style inline edit on user messages: override the shipped
 			// 'user'/'steering' bubble renderer (lower priority wins the keyed

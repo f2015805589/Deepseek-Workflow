@@ -9,7 +9,9 @@
 // reply falls away.
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId } from '../../packages/core/session/lib/index.js'
-import { applyConversationEdit, forkAnchorBeforeMessage } from '../plugins/dsh-client-ui-desktop-plugins/lib/index.js'
+import {
+  applyConversationEdit, forkAnchorBeforeMessage, fsJournals, lineDiff, pendingFilesOf,
+} from '../plugins/dsh-client-ui-desktop-plugins/lib/index.js'
 
 /** One completed turn: a user prompt and its assistant reply. */
 function completeTurn(session: Session, turn: number, messageId: string, prompt: string, replyId: string, reply: string): void {
@@ -177,5 +179,47 @@ describe('desktop edit-and-resend fork anchor (发送 deletes the old reply)', (
     // Turn 1 (msg-2 "3" and its reply "reply to 3") is gone; only the edited
     // "4" and the retained prior turn remain.
     expect(child.deriveMessages().map(textOf)).toEqual(['1', 'reply to 1', '4'])
+  })
+})
+
+describe('desktop file-changes panel diff and baseline aggregation', () => {
+  it('counts pure additions, pure deletions, and mixed edits', () => {
+    expect(lineDiff('', 'a\nb\nc')).toEqual({ additions: 3, deletions: 0 })
+    expect(lineDiff('a\nb\nc', '')).toEqual({ additions: 0, deletions: 3 })
+    expect(lineDiff('keep\nold\nend', 'keep\nnew\nend')).toEqual({ additions: 1, deletions: 1 })
+    expect(lineDiff('a\nb', 'a\nb')).toEqual({ additions: 0, deletions: 0 })
+  })
+
+  it('ignores the trailing newline when counting', () => {
+    expect(lineDiff('a\n', 'a\nb\n')).toEqual({ additions: 1, deletions: 0 })
+    expect(lineDiff('a\nb\n', 'a\n')).toEqual({ additions: 0, deletions: 1 })
+  })
+
+  it('aggregates pending files with the EARLIEST turn winning as the baseline', () => {
+    const journals = new Map()
+    const bySession = new Map()
+    // Turn 0 touches alpha.txt (baseline "old-a") and beta.txt (baseline "old-b").
+    const turn0 = new Map()
+    turn0.set('alpha.txt', { target: {}, path: '/p/alpha.txt', existed: true, content: 'old-a' })
+    turn0.set('beta.txt', { target: {}, path: '/p/beta.txt', existed: true, content: 'old-b' })
+    bySession.set(0, turn0)
+    // Turn 1 re-touches alpha.txt: its snapshot is the state AT turn 1, not
+    // the pre-session baseline — the earliest entry must win.
+    const turn1 = new Map()
+    turn1.set('alpha.txt', { target: {}, path: '/p/alpha.txt', existed: true, content: 'mid-a' })
+    turn1.set('gamma.txt', { target: {}, path: '/p/gamma.txt', existed: false, content: '' })
+    bySession.set(1, turn1)
+    journals.set('s1', bySession)
+
+    const pending = pendingFilesOf(journals, 's1')
+    expect([...pending.keys()].sort()).toEqual(['alpha.txt', 'beta.txt', 'gamma.txt'])
+    expect(pending.get('alpha.txt')).toMatchObject({ content: 'old-a' })
+    expect(pending.get('beta.txt')).toMatchObject({ content: 'old-b' })
+    expect(pending.get('gamma.txt')).toMatchObject({ existed: false })
+  })
+
+  it('returns an empty map for sessions with no journal', () => {
+    expect(pendingFilesOf(fsJournals, 'no-such-session').size).toBe(0)
+    expect(pendingFilesOf(new Map(), 'any').size).toBe(0)
   })
 })
