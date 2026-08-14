@@ -56,9 +56,26 @@ const settingsBridge = Object.freeze({
   setCompactionThreshold: (ratio) => ipcRenderer.invoke('dsh-desktop:settings:compaction-threshold-set', ratio),
 })
 
+// Per-turn file-revert bridge: the host half of the desktop product plugin
+// journals fs-tool mutations per turn and restores them on demand.
+const fsRevertBridge = Object.freeze({
+  list: (sessionId) => ipcRenderer.invoke('dsh-desktop:fs-revert:list', sessionId),
+  apply: (sessionId, fromTurn, toTurn) => ipcRenderer.invoke('dsh-desktop:fs-revert:apply', sessionId, fromTurn, toTurn),
+})
+
+// In-place conversation-edit bridge: replaces one user message on the model
+// surface in the SAME session (no fork), and resolves the fork anchor for the
+// edit-and-resend path (the turn/end BEFORE the edited message's turn).
+const conversationEditBridge = Object.freeze({
+  apply: (sessionId, messageId, text) => ipcRenderer.invoke('dsh-desktop:conversation-edit:apply', sessionId, messageId, text),
+  priorTurnEnd: (sessionId, messageSeq) => ipcRenderer.invoke('dsh-desktop:conversation-edit:prior-turn-end', sessionId, messageSeq),
+})
+
 contextBridge.exposeInMainWorld('dshDesktop', Object.freeze({
   isDesktop: true,
   platform: process.platform,
   plugins: pluginsBridge,
   settings: settingsBridge,
+  fsRevert: fsRevertBridge,
+  conversationEdit: conversationEditBridge,
 }))

@@ -9,7 +9,7 @@ DeepSeek Desktop：DeepSeek Harness Web GUI 的 Electron 桌面表面。其主�
 本文件夹也作为独立的 [Deepseek-Workflow](https://github.com/f2015805589/Deepseek-Workflow) 仓库发布。它在运行时**并非独立**：桌面端是 deepseek-harness pnpm 工作区的成员，其 `@deepseek-ai/*` 依赖都从 harness 解析，因此本地必须有一份 deepseek-harness checkout。
 
 - `package.bat`（打包）定位 harness checkout——按 `DSH_HARNESS_ROOT` 环境变量 → 上一级兄弟目录 `..\deepseek-harness` → 父目录本身就是 harness 的顺序查找——把本仓库同步为它的 `deepseek-desktop\`，若 `pnpm-workspace.yaml` 缺少 `deepseek-desktop` 成员则补上，然后安装/构建/运行。
-- **不再需要配套包**：桌面端是 web profile 之上的纯壳，只依赖每个标准 harness checkout 都有的包（`@deepseek-ai/dsh`、`dsh-app-boot`、`dsh-host-webserver`、`dsh-settings`）。早期版本曾随包提供桌面自有的产品插件（压缩设置、编辑重发、文件撤销、插件管理器）；这些包源码已丢失，本仓库不再引用它们——overlay 与依赖图里都不再出现这些名字。
+- **不再需要配套包**：桌面端是 web profile 之上的纯壳，只依赖每个标准 harness checkout 都有的包（`@deepseek-ai/dsh`、`dsh-app-boot`、`dsh-host-webserver`、`dsh-settings`）。早期版本曾随包提供桌面自有的产品插件（压缩设置、编辑重发、文件撤销、插件管理器）；这些包源码已丢失，本仓库不再以独立包的形式引用它们——overlay 与依赖图里都不再出现这些名字。其中「自定义插件管理器、压缩阈值、Cursor 风格消息就地编辑（不 fork 同一会话内生效）、按轮文件撤销」已作为**自定义插件**（`plugins/dsh-client-ui-desktop-plugins`，见 `plugins/plugins.json` 默认启用）重新提供。
 
 ## 运行
 
@@ -35,6 +35,8 @@ pnpm --filter @deepseek-ai/dsh-desktop start
 ## 产品表面
 
 桌面端渲染的组合 web profile 与浏览器完全一致——窗口只是真实 Web GUI 之上的加固壳，不含任何桌面自有的产品插件。早期版本曾随包提供四个配套插件（编辑重发、按轮文件撤销、自动压缩阈值控件、自定义插件管理器页签）；其源码已丢失，本仓库不再随包提供，因此这些功能不再存在。表面 overlay 现在只保留面向窗口的配置行（`webserver`、`web-runtime`）。
+
+> 注：上述四项产品能力已由随仓库提交的**自定义插件** `plugins/dsh-client-ui-desktop-plugins`（默认启用）重新提供：设置 → 插件 →「自定义插件」页签管理桌面自有 `plugins/`；输入行右侧的压缩阈值；点击用户消息气泡即可**就地编辑**——失焦仅更新同一会话内的上下文（旧回答保留），「发送」则回卷并删除旧回答、让模型按修改后的内容直接重答（不产生可见新对话）；每轮消息下的「撤销修改」。插件的宿主半实现编辑提交/重发锚点 IPC 与 fs 撤销 IPC。
 
 自定义插件机制保留：桌面自有的 `plugins/` 文件夹、启用注册表、每次启动的 profile 链接与生成的组合 overlay 都照常产出，沙箱 preload 仍暴露 `window.dshDesktop.plugins`，页面（或未来的管理器 UI）可以列出/导入/移除自定义插件。插件管理器页签已随仓库再次提供——作为**自定义插件**放在 `plugins/dsh-client-ui-desktop-plugins`（通过随仓库提交的 `plugins/plugins.json` 默认启用），在 设置 → 插件 注册「自定义插件」页签，驱动 preload 桥。
 

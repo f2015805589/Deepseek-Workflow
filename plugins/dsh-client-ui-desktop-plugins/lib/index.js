@@ -1,11 +1,14 @@
-// Host half of the desktop product plugins: registers the durable
-// `compaction` settings namespace backing the composer tool-row threshold
-// control (client half) and the compaction-basic backend's per-measurement
-// override. The namespace is intentionally registered WITHOUT a default: an
-// absent section means "not configured", so the backend keeps its composition
-// config until the user picks a threshold.
+// Host half of the desktop product plugins:
+//   1. registers the durable `compaction` settings namespace backing the
+//      composer tool-row threshold control and the compaction-basic backend's
+//      per-measurement override;
+//   2. keeps a per-turn journal of fs-tool mutations (snapshot before
+//      write/edit) and exposes a revert gateway over the main-process IPC:
+//      edit-resend can roll back the replaced turns' file changes, and the
+//      turn tail offers a standalone per-turn 撤销修改.
 import z from '@deepseek-ai/schemastery'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { unlinkSync } from 'node:fs'
 
 /** The durable compaction settings namespace (plain string: settingsNamespace is a brand-only passthrough). */
 export const COMPACTION_SETTINGS_NAMESPACE = settingsNamespace('compaction')
@@ -14,8 +17,117 @@ export const COMPACTION_SETTINGS_NAMESPACE = settingsNamespace('compaction')
 export const COMPACTION_THRESHOLD_MIN = 0.1
 export const COMPACTION_THRESHOLD_MAX = 0.9
 
-/** Host registration for the compaction threshold preference. */
+/**
+ * Resolve the fork anchor for an edit-and-resend: the seq of the `turn/end`
+ * of the completed turn BEFORE the one containing `messageSeq`. The wire
+ * `session.fork` cuts at the first `turn/end` at or after its `atSeq`, so
+ * this anchor makes the child = [everything before the edited turn] — the
+ * edited message and its whole reply (plus any later turns) fall away, which
+ * is exactly what edit-and-resend means. A message opening the FIRST turn has
+ * no prior completed turn (an empty child cannot be forked), reported as
+ * `{ ok: false, error: 'first-turn' }` so the client can rewind to a fresh
+ * blank session instead.
+ * @param session - the live session.
+ * @param messageSeq - the edited user message's event seq (client node.anchorSeq).
+ * @returns `{ ok: true, atSeq }`, `{ ok: false, error: 'first-turn' }`, or a
+ *   validation error.
+ */
+export function forkAnchorBeforeMessage(session, messageSeq) {
+  const events = session.events
+  if (!Number.isSafeInteger(messageSeq) || messageSeq < 0 || messageSeq >= events.length) {
+    return { ok: false, error: 'invalid-message-seq' }
+  }
+  // The turn containing the message: the nearest turn/start at or before it.
+  let turnStart = -1
+  for (let i = messageSeq; i >= 0; i--) {
+    if (events[i]?.type === 'turn/start') {
+      turnStart = i
+      break
+    }
+  }
+  if (turnStart === -1) return { ok: false, error: 'message-not-in-turn' }
+  // The nearest turn/end BEFORE that turn's start: the prior completed turn.
+  for (let i = turnStart - 1; i >= 0; i--) {
+    if (events[i]?.type === 'turn/end') return { ok: true, atSeq: events[i].seq }
+  }
+  // No completed turn precedes the edited turn: the message opens turn 0.
+  return { ok: false, error: 'first-turn' }
+}
+
+/**
+ * Replace one finalized user message on the model surface with the edited
+ * text, IN PLACE, in the SAME session — no fork, no new dialog. The session
+ * log stays append-only: a new `user/message` event with a positional
+ * `surfaceOp: replace` shadows the original node, so every later request's
+ * derived history (`session.deriveMessages()`, the sole context source the
+ * agent loop feeds the model from) reads the edited wording, while the
+ * human transcript keeps the append-origin message (the renderer overlay
+ * shows the edited copy).
+ *
+ * The replaced range is the single surface node of this message, so a reply
+ * that followed it stays in place — editing "1" to "2" and then sending a
+ * new message at the bottom reads as [2, reply-to-1, new-message]. This is
+ * the "stage the edit" path (clicking elsewhere); the 发送 path uses
+ * {@link forkAnchorBeforeMessage} to rewind and resend instead.
+ *
+ * Exported separately from `apply` so the pure logic is unit-testable
+ * without booting the profile; `apply` wires it behind the IPC handler.
+ *
+ * @param sessions - the host SessionStore (`ctx.get('sessions')`).
+ * @param sessionId - the live session id.
+ * @param messageId - the message id the surface node carries (client node.id).
+ * @param text - the edited prompt text; the text block is dropped when blank.
+ * @returns `{ ok: true, seq }` or `{ ok: false, error }`.
+ */
+export function applyConversationEdit(sessions, sessionId, messageId, text) {
+  if (!sessions || typeof sessions.get !== 'function') {
+    return { ok: false, error: 'sessions-service-unavailable' }
+  }
+  const session = sessions.get(sessionId)
+  if (!session) return { ok: false, error: 'session-not-found' }
+  const surface = session.surface
+  if (!surface || !Array.isArray(surface.nodes)) {
+    return { ok: false, error: 'surface-unavailable' }
+  }
+  // Locate the CURRENT surface node for this message. After a previous edit
+  // the surface node is the replacement event (same message id), not the
+  // original append-origin event, so re-editing stays accurate; a message
+  // already shadowed by compaction is not editable.
+  let target
+  for (const seq of surface.nodes) {
+    const event = session.events[seq]
+    if (event && event.type === 'user/message' && event.data && event.data.id === messageId) {
+      target = event
+      break
+    }
+  }
+  if (!target) return { ok: false, error: 'message-not-editable' }
+  const original = target.data
+  const blocks = Array.isArray(original.content) ? original.content : []
+  const content = [
+    ...blocks.filter(block => block && block.type === 'image'),
+    ...(typeof text === 'string' && text.trim() !== '' ? [{ type: 'text', text }] : []),
+  ]
+  const replacement = { ...original, content }
+  try {
+    const logged = session.append('user/message', replacement, {
+      surfaceOp: { op: 'replace', start: target.seq, end: target.seq },
+      sourceEventSeqs: [target.seq],
+    })
+    return { ok: true, seq: logged.seq }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+/**
+ * The desktop product surface plugin body.
+ * @param ctx - the host context (desktop main process profile boot).
+ */
 export function apply(ctx) {
+  // ── compaction threshold settings namespace ───────────────────────────────
+  // Registered WITHOUT a default: an absent section means "not configured", so
+  // the backend keeps its composition config until the user picks a threshold.
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(COMPACTION_SETTINGS_NAMESPACE, z.object({
       thresholdRatio: z.number(),
@@ -30,5 +142,181 @@ export function apply(ctx) {
         }
       },
     })
+  })
+
+  // ── per-turn fs mutation journal ───────────────────────────────────────────
+  /** sessionId -> Map<turn, Map<targetKey, { target, path, existed, content }>> */
+  const journals = new Map()
+  /** sessionId -> current turn index, advanced on user/message events. */
+  const turnBySession = new Map()
+  /** True while the revert gateway is writing restored content back. */
+  let restoring = false
+
+  const turnOf = (session) => turnBySession.get(session.id) ?? 0
+
+  const safeProcessPath = (target) => {
+    try {
+      return ctx.fs.processPath(target)
+    } catch {
+      return undefined
+    }
+  }
+
+  /** Snapshot one target's pre-mutation state into the current turn's entry. */
+  async function snapshotFile(target, actor) {
+    if (restoring) return
+    const session = actor && actor.agent && actor.agent.session
+    if (!session) return
+    let existed = true
+    let content = ''
+    try {
+      const info = await ctx.fs.stat(target)
+      if (info === undefined) {
+        existed = false
+      } else {
+        content = await ctx.fs.readText(target)
+      }
+    } catch {
+      // Unreadable/racy targets are skipped; the mutation itself must never
+      // be blocked by the journal.
+      return
+    }
+    let bySession = journals.get(session.id)
+    if (!bySession) {
+      bySession = new Map()
+      journals.set(session.id, bySession)
+    }
+    const turn = turnOf(session)
+    let files = bySession.get(turn)
+    if (!files) {
+      files = new Map()
+      bySession.set(turn, files)
+    }
+    // First mutation of the file in this turn wins: that snapshot IS the
+    // file's state at the start of the turn's changes.
+    if (!files.has(target.targetKey)) {
+      files.set(target.targetKey, { target, path: safeProcessPath(target), existed, content })
+    }
+  }
+
+  // Transparent waterfall participants: snapshot, then compose (`return next()`)
+  // so policy listeners and the write itself are untouched.
+  ctx.on('fs/write-intent', async (target, actor, next) => {
+    await snapshotFile(target, actor)
+    return next()
+  })
+  ctx.on('fs/edit-intent', async (target, actor, next) => {
+    await snapshotFile(target, actor)
+    return next()
+  })
+
+  // Advance the per-session turn counter on each human prompt.
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'user/message') return
+    const turn = event.data?.turn
+    if (typeof turn === 'number') turnBySession.set(session.id, turn)
+  })
+
+  /** Summarize one session's journal for the manager UI. */
+  function listTurns(sessionId) {
+    const bySession = journals.get(sessionId)
+    if (!bySession) return []
+    const rows = []
+    for (const [turn, files] of bySession) {
+      rows.push({
+        turn,
+        files: [...files.values()].map((snapshot) => ({ path: snapshot.path, existed: snapshot.existed })),
+      })
+    }
+    rows.sort((left, right) => left.turn - right.turn)
+    return rows
+  }
+
+  /**
+   * Restore the journaled snapshots of turns [fromTurn, toTurn]. Restoring in
+   * reverse turn order makes the EARLIEST snapshot (the pre-turn-fromTurn
+   * state) win for any file touched by several reverted turns.
+   * @param sessionId - the session whose journal is reverted.
+   * @param fromTurn - first turn to revert (inclusive).
+   * @param toTurn - last turn to revert (inclusive); defaults to fromTurn.
+   * @returns the number of restored files.
+   */
+  async function revertSession(sessionId, fromTurn, toTurn = fromTurn) {
+    const bySession = journals.get(sessionId)
+    if (!bySession) return { restored: 0 }
+    const snapshots = []
+    for (const [turn, files] of bySession) {
+      if (turn < fromTurn || turn > toTurn) continue
+      for (const snapshot of files.values()) snapshots.push({ turn, ...snapshot })
+    }
+    snapshots.sort((left, right) => right.turn - left.turn)
+    restoring = true
+    let restored = 0
+    try {
+      for (const snapshot of snapshots) {
+        try {
+          if (snapshot.existed) {
+            await ctx.fs.writeText(snapshot.target, snapshot.content)
+          } else if (snapshot.path !== undefined) {
+            // The file did not exist before the turn: revert = delete it.
+            unlinkSync(snapshot.path)
+          }
+          restored += 1
+        } catch {
+          // The user may have moved or deleted a file since; keep going.
+        }
+      }
+    } finally {
+      restoring = false
+    }
+    for (const turn of [...bySession.keys()]) {
+      if (turn >= fromTurn && turn <= toTurn) bySession.delete(turn)
+    }
+    return { restored }
+  }
+
+  // The revert and conversation-edit gateways ride the main process (this
+  // plugin runs inside the desktop main's profile boot). Under plain-Node
+  // probe/e2e boots the electron package resolves to its binary-path shim:
+  // the journal still works, only the IPC handlers are skipped.
+  import('electron').then(({ ipcMain }) => {
+    ipcMain.handle('dsh-desktop:fs-revert:list', (_event, sessionId) => listTurns(sessionId))
+    ipcMain.handle('dsh-desktop:fs-revert:apply', (_event, sessionId, fromTurn, toTurn) => {
+      if (typeof sessionId !== 'string' || sessionId.length === 0
+        || typeof fromTurn !== 'number' || !Number.isInteger(fromTurn) || fromTurn < 0) {
+        throw new Error('dsh desktop: invalid fs-revert payload')
+      }
+      return revertSession(sessionId, fromTurn, typeof toTurn === 'number' ? toTurn : fromTurn)
+    })
+    ipcMain.handle('dsh-desktop:conversation-edit:apply', (_event, sessionId, messageId, text) => {
+      if (typeof sessionId !== 'string' || sessionId.length === 0
+        || typeof messageId !== 'string' || messageId.length === 0
+        || typeof text !== 'string') {
+        throw new Error('dsh desktop: invalid conversation-edit payload')
+      }
+      // ctx.get resolves the service without the inject requirement (same
+      // path as the desktop main's ctx.get('webServer')); the plugin's apply
+      // context must not declare 'sessions' as a required service to keep the
+      // boot graph lean.
+      return applyConversationEdit(
+        typeof ctx.get === 'function' ? ctx.get('sessions') : undefined,
+        sessionId,
+        messageId,
+        text,
+      )
+    })
+    ipcMain.handle('dsh-desktop:conversation-edit:prior-turn-end', (_event, sessionId, messageSeq) => {
+      if (typeof sessionId !== 'string' || sessionId.length === 0
+        || typeof messageSeq !== 'number' || !Number.isSafeInteger(messageSeq) || messageSeq < 0) {
+        throw new Error('dsh desktop: invalid conversation-edit prior-turn payload')
+      }
+      const session = typeof ctx.get === 'function'
+        ? ctx.get('sessions')?.get(sessionId)
+        : undefined
+      if (!session) return { ok: false, error: 'session-not-found' }
+      return forkAnchorBeforeMessage(session, messageSeq)
+    })
+  }).catch(() => {
+    // Plain node boot: no Electron IPC available.
   })
 }
