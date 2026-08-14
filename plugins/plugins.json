@@ -1,0 +1,7 @@
+{
+  "plugins": {
+    "dsh-client-ui-desktop-plugins": {
+      "enabled": true
+    }
+  }
+}

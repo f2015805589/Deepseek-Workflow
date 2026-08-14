@@ -1,0 +1,20 @@
+{
+  "name": "dsh-client-ui-desktop-plugins",
+  "description": "DeepSeek Workflow 自定义插件管理器页签：设置 → 插件 → 自定义插件。通过 preload 桥 window.dshDesktop.plugins 列出、启用/停用、导入、删除桌面自有 plugins/ 文件夹下的插件。",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib"
+  ]
+}

@@ -20,9 +20,14 @@ if not defined FOUND (
 )
 for %%I in ("%FOUND%") do set "FOUND=%%~fI"
 
-rem Already inside the harness as deepseek-desktop: nothing to sync.
+rem Already inside the harness as deepseek-desktop (or the standalone repo's
+rem own folder name Deepseek-Workflow): nothing to sync.
 for %%I in ("%~dp0..") do set "SELF=%%~fI"
 if /i "%SELF%" == "%FOUND%\deepseek-desktop" (
+    endlocal & set "HARNESS_ROOT=%FOUND%"
+    exit /b 0
+)
+if /i "%SELF%" == "%FOUND%\Deepseek-Workflow" (
     endlocal & set "HARNESS_ROOT=%FOUND%"
     exit /b 0
 )

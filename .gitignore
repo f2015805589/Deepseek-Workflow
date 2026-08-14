@@ -8,6 +8,9 @@ deploy-stale-*/
 build/
 *.log
 *.tsbuildinfo
-plugins/plugins.json
+# plugins.json ships the default enablement (the desktop plugin manager tab);
+# user-local enable/disable edits show up as normal diffs. The generated
+# composition overlay stays user-local: it is rebuilt from the registry on
+# every launch.
 plugins/desktop-plugins.generated.patch.yml
 .iconcheck/

@@ -30,13 +30,13 @@ pnpm --filter @deepseek-ai/dsh-desktop start
 
 `start` 会重建 `lib/`（tsdown + 沙箱 preload 复制）并启动 Electron。桌面会话运行期间再次启动只会聚焦已有窗口。`$DSH_HOME` 是共享的 harness home：桌面端看到的 profile、设置、凭据和会话与 CLI 相同。外壳/客户端插件的变更遵循与 Web GUI 相同的契约——外壳变更后 `pnpm run build:web`，客户端插件 HMR 用 `pnpm run dev:web`，然后重启。
 
-没有一键开发引导（旧的 `setup.bat` 已删除）：在 harness 的 `pnpm-workspace.yaml` 加入 `deepseek-desktop` 成员，在 harness 根运行 `pnpm install` 与 `pnpm run build`，然后 `pnpm --filter @deepseek-ai/dsh-desktop start`。
+没有一键开发引导（旧的 `setup.bat` 已删除）：把这个文件夹加入 harness 的 `pnpm-workspace.yaml` 成员（名称为 `deepseek-desktop`，或独立仓库自身的文件夹名如 `Deepseek-Workflow`），在 harness 根运行 `pnpm install` 与 `pnpm run build`，然后 `pnpm --filter @deepseek-ai/dsh-desktop start`。桌面构建还会刷新 `apps/cli/lib/package.json`——已构建的 `@deepseek-ai/dsh/profile-boot` 所解析的锚点清单——因此 harness 清理后桌面依然可用。
 
 ## 产品表面
 
 桌面端渲染的组合 web profile 与浏览器完全一致——窗口只是真实 Web GUI 之上的加固壳，不含任何桌面自有的产品插件。早期版本曾随包提供四个配套插件（编辑重发、按轮文件撤销、自动压缩阈值控件、自定义插件管理器页签）；其源码已丢失，本仓库不再随包提供，因此这些功能不再存在。表面 overlay 现在只保留面向窗口的配置行（`webserver`、`web-runtime`）。
 
-自定义插件机制保留：桌面自有的 `plugins/` 文件夹、启用注册表、每次启动的 profile 链接与生成的组合 overlay 都照常产出，沙箱 preload 仍暴露 `window.dshDesktop.plugins`，页面（或未来的管理器 UI）可以列出/导入/移除自定义插件。
+自定义插件机制保留：桌面自有的 `plugins/` 文件夹、启用注册表、每次启动的 profile 链接与生成的组合 overlay 都照常产出，沙箱 preload 仍暴露 `window.dshDesktop.plugins`，页面（或未来的管理器 UI）可以列出/导入/移除自定义插件。插件管理器页签已随仓库再次提供——作为**自定义插件**放在 `plugins/dsh-client-ui-desktop-plugins`（通过随仓库提交的 `plugins/plugins.json` 默认启用），在 设置 → 插件 注册「自定义插件」页签，驱动 preload 桥。
 
 ## 自定义插件
 

@@ -30,13 +30,13 @@ To produce a Windows executable, double-click `deepseek-desktop/package.bat` (or
 
 `start` rebuilds `lib/` (tsdown + the sandboxed preload copy) and launches Electron. A second launch while a desktop session is running focuses the existing window. `$DSH_HOME` is the shared harness home: the desktop sees the same profiles, settings, credentials, and sessions as the CLI. Shell/client-plugin changes follow the same contract as the Web GUI — rebuild the affected artifacts (`pnpm run build:web` for the shell, `pnpm run dev:web` for client-plugin HMR) and relaunch.
 
-There is no one-click dev bootstrap (the old `setup.bat` was removed): add `deepseek-desktop` to the harness `pnpm-workspace.yaml`, run `pnpm install` and `pnpm run build` at the harness root, then `pnpm --filter @deepseek-ai/dsh-desktop start`.
+There is no one-click dev bootstrap (the old `setup.bat` was removed): add this folder as a member of the harness `pnpm-workspace.yaml` (under the name `deepseek-desktop` — or the standalone repo's own folder name, e.g. `Deepseek-Workflow`), run `pnpm install` and `pnpm run build` at the harness root, then `pnpm --filter @deepseek-ai/dsh-desktop start`. The desktop build also refreshes `apps/cli/lib/package.json` — the anchor manifest the built `@deepseek-ai/dsh/profile-boot` resolves — so the desktop keeps working after a harness clean.
 
 ## Product surface
 
 The desktop renders the composed web profile exactly as the browser does — the window is a hardened shell over the real Web GUI, with no desktop-owned product plugins. Earlier revisions shipped four companion plugins (edit & resend, per-turn file revert, an auto-compaction threshold control, and a custom-plugin manager tab); their sources are lost and this repo no longer ships them, so those features are not present. The surface overlay now carries only the window-facing config rows (`webserver`, `web-runtime`).
 
-The custom-plugin machinery stays: the desktop-owned `plugins/` folder, the enablement registry, per-boot profile linking, and the generated composition overlay are all still produced at every launch, and the sandboxed preload exposes `window.dshDesktop.plugins` so a page (or a future manager UI) can list/import/remove custom plugins.
+The custom-plugin machinery stays: the desktop-owned `plugins/` folder, the enablement registry, per-boot profile linking, and the generated composition overlay are all still produced at every launch, and the sandboxed preload exposes `window.dshDesktop.plugins` so a page (or a future manager UI) can list/import/remove custom plugins. A plugin-manager tab is shipped again — as a **custom plugin** under `plugins/dsh-client-ui-desktop-plugins` (enabled by default via the committed `plugins/plugins.json`), registering a 自定义插件 tab in Settings → 插件 that drives the preload bridge.
 
 ## Custom plugins
 
