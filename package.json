@@ -1,0 +1,76 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "DeepSeek Workflow: Electron shell embedding the dsh web-profile host in-process",
+  "version": "0.1.0-rc.5",
+  "private": true,
+  "author": "DeepSeek",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/f2015805589/Deepseek-Workflow.git",
+    "directory": "deepseek-desktop"
+  },
+  "type": "module",
+  "main": "lib/main.js",
+  "files": [
+    "lib",
+    "config"
+  ],
+  "scripts": {
+    "build": "tsdown && node scripts/copy-preload.mjs",
+    "start": "pnpm run build && electron .",
+    "package": "package.bat"
+  },
+  "build": {
+    "appId": "com.deepseek.harness.desktop",
+    "productName": "DeepSeek Workflow",
+    "icon": "build/icon.ico",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "lib/**/*",
+      "config/**/*",
+      {
+        "from": "node_modules",
+        "to": "node_modules"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "compression": "store",
+    "npmRebuild": false,
+    "asar": false
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-compaction-setting": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-conversation-edit": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-desktop-plugins": "workspace:^",
+    "@deepseek-ai/dsh-fs-revert": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
+    "koffi": "^3.1.0"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "^26.15.3",
+    "tsdown": "^0.22.2",
+    "vitest": "^4.1.8"
+  }
+}

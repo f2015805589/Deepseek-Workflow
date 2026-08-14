@@ -1,0 +1,13 @@
+# DeepSeek Workflow 独立仓库忽略规则（Deepseek-Workflow = deepseek-desktop 文件夹）。
+# 进入 harness checkout 后与 harness 根 .gitignore 叠加生效。
+node_modules/
+lib/
+dist/
+deploy/
+deploy-stale-*/
+build/
+*.log
+*.tsbuildinfo
+plugins/plugins.json
+plugins/desktop-plugins.generated.patch.yml
+.iconcheck/
