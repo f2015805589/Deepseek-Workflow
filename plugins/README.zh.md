@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-这个文件夹存放通过桌面端（设置 → 插件 → 导入插件文件夹）导入的自定义插件。它特意放在桌面端自己的目录下：替换或重装 dsh（支撑桌面端的 harness）不会影响它——你的插件始终保留。
+这个文件夹存放你导入的自定义插件（通过 `window.dshDesktop.plugins` preload 桥，或直接把文件夹放到这里）。它特意放在桌面端自己的目录下：替换或重装 dsh（支撑桌面端的 harness）不会影响它——你的插件始终保留。
 
 ## 自定义插件是什么
 
@@ -13,13 +13,13 @@
 
 同时具备两种形态（双面包）也支持。
 
-`plugins/` 下的文件夹名即包名；loader 从 web profile 的 `node_modules` 解析裸包名，桌面端每次启动都会在这里为本文件夹建立 junction。桌面端自己的出厂行（编辑重发、轮次撤销、压缩设置、插件管理）是桌面自有的包，经桌面端每次启动用自己的依赖闭包修复的 profile 回退目录解析——因此即使 dsh 安装里根本没有这些包也能正常工作。
+`plugins/` 下的文件夹名即包名；loader 从 web profile 的 `node_modules` 解析裸包名，桌面端每次启动都会在这里为本文件夹建立 junction。
 
 ## 管理插件
 
-使用桌面 UI（设置 → 插件）：
+在任意页面脚本里使用 preload 桥（`window.dshDesktop.plugins`），或手工编辑 `plugins/plugins.json`：
 
-- **导入** —— 选择一个包含已构建插件包的文件夹；桌面端把它复制到这里并启用。
+- **导入** —— `window.dshDesktop.plugins.import(sourceDir)` 复制一个包含已构建插件包的文件夹到这里并启用。
 - **启用 / 停用** —— 持久化到 `plugins.json`；变更在下次启动时生效。
 - **删除** —— 移除文件夹及其注册表条目。
 
@@ -27,7 +27,7 @@
 
 ## 开发环境
 
-`deepseek-desktop/setup.bat` 引导开发环境（安装 + 构建）并启动桌面端。内置插件注入在每次启动时自动完成——不需要任何逐机设置步骤。
+没有一键引导：在 harness 的 `pnpm-workspace.yaml` 加入 `deepseek-desktop` 成员，在 harness 根安装并构建，然后 `pnpm --filter @deepseek-ai/dsh-desktop start`。桌面壳不再随包提供内置产品插件；本文件夹里的自定义插件每次启动自动挂载——不需要任何逐机设置步骤。
 
 ## 文件
 

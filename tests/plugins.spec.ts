@@ -2,8 +2,6 @@ import { mkdirSync, readFileSync, readlinkSync, writeFileSync } from 'node:fs'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { describe, expect, it } from 'vitest'
 import {
   composePluginRows,
@@ -193,24 +191,9 @@ describe('desktop custom plugin registry', () => {
     expect(() => setPluginEnabled('missing', true, pluginsDir)).toThrow(/not installed/)
   })
 
-  it('reports the shipped built-in rows for the manager', () => {
+  it('reports the reserved desktop product rows for the manager', () => {
     expect(DESKTOP_BUILTIN_PLUGINS.map(row => row.id)).toEqual([
       'ui-compaction-setting', 'ui-conversation-edit', 'fs-revert',
     ])
-  })
-
-  it('heals the profile fallback from the desktop closure so built-ins resolve against a bare dsh', () => {
-    // The desktop main runs this pass with its own package.json as the
-    // anchor, independent of what the installed dsh ships — a bare dsh still
-    // resolves every desktop-default row from the healed fallback.
-    const home = tempRoot()
-    const desktopManifest = fileURLToPath(new URL('../package.json', import.meta.url))
-    healProfilesModuleFallback(desktopManifest, home)
-    const fallback = join(home, 'profiles', 'node_modules')
-    for (const name of DESKTOP_BUILTIN_PLUGINS.map(row => row.name)) {
-      const target = readlinkSync(join(fallback, name))
-      const manifest = JSON.parse(readFileSync(join(target, 'package.json'), 'utf8')) as { name?: unknown }
-      expect(manifest.name).toBe(name)
-    }
   })
 })

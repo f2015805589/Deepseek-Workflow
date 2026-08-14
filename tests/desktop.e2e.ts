@@ -5,13 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
 import { runProfile } from '@deepseek-ai/dsh/profile-boot'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 // Activates the webServer Context merge read below. The client-modules merge
 // stays out: its source lives in the client aggregate, so the graph read is
 // narrowed with a local type instead.
 import type {} from '@deepseek-ai/dsh-host-webserver'
-// Activates the fsRevert Context merge for the overlay assertion.
-import type {} from '@deepseek-ai/dsh-fs-revert'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { desktopOverlayPath, desktopUrl } from '../src/desktop.ts'
 import { prepareDesktopPlugins, writePluginsRegistry } from '../src/plugins.ts'
@@ -89,15 +86,6 @@ describe('dsh desktop host', () => {
     expect(logged.some(line => line.includes('dsh web:'))).toBe(false)
   })
 
-  it('registers the desktop-default compaction namespace through the overlay', () => {
-    const settings = booted.ctx.get('settings')
-    expect(settings?.get(settingsNamespace('compaction'))).toEqual({ thresholdRatio: 0.8 })
-  })
-
-  it('mounts the desktop-default revert journal through the overlay', () => {
-    expect(booted.ctx.get('fsRevert')).toBeDefined()
-  })
-
   it('serves the boot-manifest index at the desktop URL', async () => {
     const response = await fetch(desktopUrl(port))
     expect(response.status).toBe(200)
@@ -112,16 +100,6 @@ describe('dsh desktop host', () => {
     const first = entries[0]
     if (first === undefined) throw new Error('empty plugin graph')
     const response = await fetch(`${desktopUrl(port)}${first.url}`)
-    expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toContain('javascript')
-  })
-
-  it('composes the desktop-default conversation-edit client plugin into the roster', async () => {
-    // The roster keys entries by package name, not by the row id.
-    const modules = booted.ctx.get('clientModules') as { graph(): { entries: Array<{ id: string; url: string }> } } | undefined
-    const entry = modules?.graph().entries.find(candidate => candidate.id === '@deepseek-ai/dsh-client-ui-conversation-edit')
-    expect(entry).toBeDefined()
-    const response = await fetch(`${desktopUrl(port)}${entry!.url}`)
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toContain('javascript')
   })

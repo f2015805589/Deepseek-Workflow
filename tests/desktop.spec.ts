@@ -26,18 +26,14 @@ describe('dsh desktop surface', () => {
     expect(DESKTOP_PROFILE).toBe('web')
   })
 
-  it('ships the two config rows and the desktop-default product inserts over the web profile', () => {
+  it('ships the two config rows over the web profile with no product inserts', () => {
     expect(existsSync(desktopOverlayPath())).toBe(true)
     const patches = loadOverlayPatches('dsh-test', desktopOverlayPath())
     expect(patches.slice(0, 2).map(patch => patch.id)).toEqual(['webserver', 'web-runtime'])
+    // The desktop shell no longer ships companion plugin rows (their sources
+    // were lost); the overlay must not reference any product package.
     const inserted = patches.slice(2).flatMap(patch => (Array.isArray(patch.insert) ? patch.insert : []))
-    expect(inserted.map(row => row.id)).toEqual(['ui-compaction-setting', 'ui-conversation-edit', 'ui-desktop-plugins', 'fs-revert'])
-    expect(inserted.map(row => row.name)).toEqual([
-      '@deepseek-ai/dsh-client-ui-compaction-setting',
-      '@deepseek-ai/dsh-client-ui-conversation-edit',
-      '@deepseek-ai/dsh-client-ui-desktop-plugins',
-      '@deepseek-ai/dsh-fs-revert',
-    ])
+    expect(inserted).toEqual([])
   })
 
   it('binds an OS-assigned loopback port', () => {

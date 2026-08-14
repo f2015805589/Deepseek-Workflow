@@ -8,8 +8,8 @@ DeepSeek Desktop: the Electron desktop surface of the DeepSeek Harness Web GUI. 
 
 This folder is also published as the standalone [Deepseek-Workflow](https://github.com/f2015805589/Deepseek-Workflow) repository. It is **not standalone at runtime**: the desktop is a member of the deepseek-harness pnpm workspace and resolves its `@deepseek-ai/*` dependencies from it, so a deepseek-harness checkout must exist locally.
 
-- `setup.bat` (dev bootstrap) and `package.bat` (packaging) locate the harness checkout — `DSH_HARNESS_ROOT` env var, else the sibling folder `..\deepseek-harness`, else the parent directory already being a harness — sync this repo into it as `deepseek-desktop\`, add the `deepseek-desktop` member to `pnpm-workspace.yaml` when missing, then install/build/run.
-- **Harness compatibility requirement**: the harness must include the desktop companion packages (`dsh-fs-revert`, `dsh-client-ui-conversation-edit`, `dsh-client-ui-desktop-plugins`, `dsh-client-ui-compaction-setting`) and the `session.revertFiles` gateway — i.e. the same feature state this desktop was built against. A harness without them fails at `pnpm install` or boot. Built-in plugins are injected into the profile resolution at every launch, so no per-machine setup is needed for them.
+- `package.bat` (packaging) locates the harness checkout — `DSH_HARNESS_ROOT` env var, else the sibling folder `..\deepseek-harness`, else the parent directory already being a harness — syncs this repo into it as `deepseek-desktop\`, adds the `deepseek-desktop` member to `pnpm-workspace.yaml` when missing, then installs/builds/runs.
+- **No companion packages required**: the desktop is a plain shell over the web profile and depends only on harness packages every stock checkout ships (`@deepseek-ai/dsh`, `dsh-app-boot`, `dsh-host-webserver`, `dsh-settings`). Earlier revisions shipped desktop-owned product plugins (compaction setting, conversation edit, fs revert, plugin manager); those package sources were lost and are no longer referenced anywhere in this repo — nothing in the overlay or the dependency graph names them.
 
 ## Run
 
@@ -30,31 +30,24 @@ To produce a Windows executable, double-click `deepseek-desktop/package.bat` (or
 
 `start` rebuilds `lib/` (tsdown + the sandboxed preload copy) and launches Electron. A second launch while a desktop session is running focuses the existing window. `$DSH_HOME` is the shared harness home: the desktop sees the same profiles, settings, credentials, and sessions as the CLI. Shell/client-plugin changes follow the same contract as the Web GUI — rebuild the affected artifacts (`pnpm run build:web` for the shell, `pnpm run dev:web` for client-plugin HMR) and relaunch.
 
-For a fresh development machine, `deepseek-desktop/setup.bat` installs dependencies, builds the tree, and launches the desktop. The desktop owns its built-in plugin packages and injects them into the profile resolution at every launch, so no per-machine setup is needed for them — even a bare dsh installation keeps working.
+There is no one-click dev bootstrap (the old `setup.bat` was removed): add `deepseek-desktop` to the harness `pnpm-workspace.yaml`, run `pnpm install` and `pnpm run build` at the harness root, then `pnpm --filter @deepseek-ai/dsh-desktop start`.
 
-## Built-in product features
+## Product surface
 
-The desktop overlay composes four product plugins by default, so every packaged machine gets them without profile edits:
+The desktop renders the composed web profile exactly as the browser does — the window is a hardened shell over the real Web GUI, with no desktop-owned product plugins. Earlier revisions shipped four companion plugins (edit & resend, per-turn file revert, an auto-compaction threshold control, and a custom-plugin manager tab); their sources are lost and this repo no longer ships them, so those features are not present. The surface overlay now carries only the window-facing config rows (`webserver`, `web-runtime`).
 
-- **Edit & resend** — a completed user message can be edited and re-sent: the action forks the session before that message and pre-fills the composer, and sending prompts the child.
-- **Turn revert** — the turn tail offers 撤销修改 with a confirm dialog over the files the turn modified through the fs tools (`write`/`edit`/`str_replace_editor`); confirming restores their pre-turn content. Shell-command writes are outside the journal's coverage.
-- **Auto-compaction threshold** — a `自动压缩 80%` control sits beside the model select in the composer tool row; the percentage is the durable `compaction.thresholdRatio` the backend re-reads at every measurement.
-- **Custom plugin manager** — a 自定义插件 tab in Settings → 插件 that imports, deletes, and enables/disables plugins under the desktop's own `plugins/` folder.
-
-The decisions and boundaries are recorded in the [desktop product surface Agent Note](../.agents/notes/implemented/feature/2026-08-14-dsh-desktop-product-surface.md) and the [custom plugins Agent Note](../.agents/notes/implemented/feature/2026-08-14-dsh-desktop-custom-plugins.md).
+The custom-plugin machinery stays: the desktop-owned `plugins/` folder, the enablement registry, per-boot profile linking, and the generated composition overlay are all still produced at every launch, and the sandboxed preload exposes `window.dshDesktop.plugins` so a page (or a future manager UI) can list/import/remove custom plugins.
 
 ## Custom plugins
 
-Custom plugins live under the desktop's own folder — `deepseek-desktop/plugins/` (or `DSH_DESKTOP_PLUGINS_DIR`) — never inside the dsh installation, so replacing dsh loses nothing. Manage them from Settings → 插件 → 自定义插件: import a plugin folder (an npm package with a built node half and, for UI plugins, a `dsh.client` browser half), enable/disable, or delete. Enablement persists to `plugins/plugins.json`; every launch links the enabled plugins into the web profile's `node_modules` and generates the composition overlay, so changes take effect on restart. See [plugins/README.md](plugins/README.md) for the folder contract.
+Custom plugins live under the desktop's own folder — `deepseek-desktop/plugins/` (or `DSH_DESKTOP_PLUGINS_DIR`) — never inside the dsh installation, so replacing dsh loses nothing. The shipped manager tab is gone with the lost companion packages; manage plugins through the `window.dshDesktop.plugins` preload bridge (`list`/`setEnabled`/`import`/`remove`, surfaced in any page script) or by editing `plugins/plugins.json` by hand — import a plugin folder (an npm package with a built node half and, for UI plugins, a `dsh.client` browser half), enable/disable, or delete. Enablement persists to `plugins/plugins.json`; every launch links the enabled plugins into the web profile's `node_modules` and generates the composition overlay, so changes take effect on restart. See [plugins/README.md](plugins/README.md) for the folder contract.
 
 ## Architecture
 
 - `src/main.ts` — the only module that imports `electron`: single-instance lock, `runProfile` boot with the overlay, window creation with no native menu bar (`Menu.setApplicationMenu(null)`), `ready-to-show` reveal, the page-synced window backdrop, and a `before-quit` handler that defers quitting until the host tree has disposed (session persistence flushes before the process leaves).
 - `src/desktop.ts` — Electron-free surface facts: overlay path, preload path, window options, loopback URL, and the IPC color-shape validator. Unit-tested without the Electron binary.
 - `config/desktop.patch.yml` — the surface overlay applied last over the web profile: webserver pinned to `127.0.0.1` port `0` (OS-assigned) and `printUrl: false` (the window owns URL display).
-- `src/preload.cjs` — hand-written sandboxed CommonJS preload exposing the frozen `window.dshDesktop` seam (`{ isDesktop, platform }`), the extension point for future desktop capabilities. It also reports the page's computed theme background to the main process, which applies it to the window backdrop — pre-paint and resize edges follow the dsh appearance configuration (the `ui-theme` body base background painted by `design-platform.css`).
-
-The decision and its alternatives are recorded in the [desktop surface Agent Note](../.agents/notes/implemented/architecture/2026-08-13-dsh-desktop-surface.md).
+- `src/preload.cjs` — hand-written sandboxed CommonJS preload exposing the frozen `window.dshDesktop` seam (`{ isDesktop, platform, plugins }`), the extension point for future desktop capabilities. It also reports the page's computed theme background to the main process, which applies it to the window backdrop — pre-paint and resize edges follow the dsh appearance configuration (the `ui-theme` body base background painted by `design-platform.css`).
 
 ## Model Experience
 

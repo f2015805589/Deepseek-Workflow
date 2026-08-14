@@ -4,11 +4,11 @@
 # and the web-runtime row stays quiet instead of printing the URL line. The
 # main process reads the bound port from the webServer service itself.
 #
-# The desktop-default rows below give every machine that launches the
-# packaged app the same product surface without profile configuration:
-# - ui-compaction-setting registers the durable `compaction` threshold
-#   namespace and adds the tool-row percentage control beside the model
-#   select (the compaction backend re-reads the setting at each measurement).
+# The desktop shell ships no product plugins of its own: the window renders
+# the composed web profile exactly as the browser does. (Earlier revisions
+# injected desktop-owned companion plugins here — compaction setting,
+# conversation edit, fs revert, plugin manager — but those packages were lost
+# and are no longer shipped; nothing in this overlay may reference them.)
 #
 # A patch replaces the targeted row's whole config, so each row below
 # restates every key it owns (the web bundle's rows are the source).
@@ -25,26 +25,3 @@
     printUrl: false
     surfaceContext: true
     trustedHosts: !!js ctx.webStartup.trustedHosts
-
-# ── desktop-default product rows ────────────────────────────────────────────
-
-- insert:
-    - id: ui-compaction-setting
-      name: '@deepseek-ai/dsh-client-ui-compaction-setting'
-
-    # Cursor-style conversation modification: edit & resend and per-turn file
-    # revert. The row is the mount point — its browser half provides the
-    # optional conversationEdit service that ui-conversation's chat view reads.
-    - id: ui-conversation-edit
-      name: '@deepseek-ai/dsh-client-ui-conversation-edit'
-
-    # Custom-plugin manager tab in Settings → 插件: import, delete, and
-    # enable/disable plugins under the desktop's own plugins folder (the
-    # preload bridge; plain dsh web mounts nothing).
-    - id: ui-desktop-plugins
-      name: '@deepseek-ai/dsh-client-ui-desktop-plugins'
-
-    # Per-turn file revert: snapshots the model-facing fs tools' mutations
-    # and serves them to the browser through session.revertFiles.
-    - id: fs-revert
-      name: '@deepseek-ai/dsh-fs-revert'

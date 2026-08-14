@@ -105,10 +105,9 @@ async function openDesktopWindow(): Promise<void> {
   const webBundles = PROFILE_TEMPLATES.web
   if (webBundles === undefined) throw new Error('dsh desktop: web profile template missing')
   initProfile(profileDir, webBundles)
-  // The desktop owns its built-in plugin rows: heal the profile module
-  // fallback from the DESKTOP's dependency closure (not dsh's), so the rows
-  // resolve even against a bare dsh installation that does not ship them.
-  // The dsh-anchored pass inside runProfile stays for its own closure.
+  // Heal the profile module fallback from the DESKTOP's dependency closure
+  // (not dsh's): the overlay and any desktop-resolved rows must keep working
+  // even against a bare dsh installation that does not ship the same closure.
   healProfilesModuleFallback(fileURLToPath(new URL('../package.json', import.meta.url)))
   diag(`openDesktopWindow: profile ${profileDir} ready`)
   const customPluginsPatch = prepareDesktopPlugins({ pluginsDir, profileDir })

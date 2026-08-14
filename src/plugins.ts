@@ -30,7 +30,12 @@ export const PLUGINS_REGISTRY_FILENAME = 'plugins.json'
 /** Regenerated-at-boot overlay filename inside the plugins folder (user-local state). */
 export const GENERATED_PATCH_FILENAME = 'desktop-plugins.generated.patch.yml'
 
-/** The shipped desktop-default plugin rows, reported to the manager as built-ins. */
+/**
+ * Desktop-reserved product rows. These were the desktop's shipped built-in
+ * plugins in earlier revisions; their sources are lost and the desktop shell
+ * no longer ships or heals them (see config/desktop.patch.yml). The names
+ * stay reserved so a custom import cannot shadow them.
+ */
 export const DESKTOP_BUILTIN_PLUGINS: readonly { id: string; name: string }[] = [
   { id: 'ui-compaction-setting', name: '@deepseek-ai/dsh-client-ui-compaction-setting' },
   { id: 'ui-conversation-edit', name: '@deepseek-ai/dsh-client-ui-conversation-edit' },

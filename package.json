@@ -59,10 +59,6 @@
   "dependencies": {
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-app-boot": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-compaction-setting": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-conversation-edit": "workspace:^",
-    "@deepseek-ai/dsh-client-ui-desktop-plugins": "workspace:^",
-    "@deepseek-ai/dsh-fs-revert": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-settings": "workspace:^",
     "koffi": "^3.1.0"
