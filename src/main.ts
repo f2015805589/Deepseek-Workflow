@@ -7,7 +7,7 @@
  * @module @deepseek-ai/dsh-desktop/main
  */
 
-import { app, BrowserWindow, ipcMain, Menu } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu } from 'electron'
 import { appendFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { healProfilesModuleFallback, initProfile, loadLayeredEnv, PROFILE_TEMPLATES, resolveProfileDir } from '@deepseek-ai/dsh-app-boot'
@@ -82,11 +82,48 @@ function registerPluginBridge(options: { pluginsDir: string; customPluginsLoadab
     }
     return importPluginFolder(sourceDir, pluginsDir)
   })
+  // Native directory picker for the plugin-manager import flow. Returns the
+  // selected absolute path, or undefined when the user cancels.
+  ipcMain.handle('dsh-desktop:plugins:pick-directory', async () => {
+    const result = await dialog.showOpenDialog({
+      title: '选择插件文件夹（含 package.json）',
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || result.filePaths.length === 0) return undefined
+    return result.filePaths[0]
+  })
   ipcMain.handle('dsh-desktop:plugins:remove', (_event, name: unknown) => {
     if (typeof name !== 'string' || name.length === 0) {
       throw new Error('dsh desktop: invalid remove payload')
     }
     removePluginFolder(name, pluginsDir)
+  })
+}
+
+/**
+ * Register the renderer-facing compaction-threshold settings bridge. The
+ * `compaction` namespace is desktop-owned and intentionally NOT part of the
+ * web configuration boundary (api-proxy's exposed set), so reads and writes
+ * go straight to the host settings service through the main process — the
+ * same loopback-only posture as the plugin bridge.
+ * @param ctx - the booted host context.
+ */
+function registerCompactionBridge(ctx: {
+  get(name: string): unknown
+}): void {
+  const settings = ctx.get('settings') as {
+    get(ns: string): unknown
+    update(ns: string, patch: object): Promise<void>
+  } | undefined
+  ipcMain.handle('dsh-desktop:settings:compaction-threshold', () => {
+    const section = settings?.get('compaction') as { thresholdRatio?: unknown } | undefined
+    return section?.thresholdRatio
+  })
+  ipcMain.handle('dsh-desktop:settings:compaction-threshold-set', (_event, ratio: unknown) => {
+    if (typeof ratio !== 'number' || !Number.isFinite(ratio) || ratio < 0.1 || ratio > 0.9) {
+      throw new Error('compaction thresholdRatio must be 0.1..0.9')
+    }
+    return settings?.update('compaction', { thresholdRatio: ratio })
   })
 }
 
@@ -130,6 +167,7 @@ async function openDesktopWindow(): Promise<void> {
   const customPluginsLoadable = loader?.internal !== undefined
   diag(`openDesktopWindow: internal loader ${customPluginsLoadable ? 'available' : 'UNAVAILABLE'}`)
   registerPluginBridge({ pluginsDir, customPluginsLoadable })
+  registerCompactionBridge(ctx)
   const win = new BrowserWindow(desktopWindowOptions(desktopPreloadPath()))
   mainWindow = win
   // The page owns its chrome: no native menu bar above the GUI.

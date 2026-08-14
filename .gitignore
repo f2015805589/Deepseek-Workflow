@@ -2,6 +2,10 @@
 # 进入 harness checkout 后与 harness 根 .gitignore 叠加生效。
 node_modules/
 lib/
+# The shipped custom plugin's lib/ is hand-written runtime source (not a
+# build artifact) and MUST be tracked — re-include it after the lib/ rule.
+!plugins/dsh-client-ui-desktop-plugins/lib/
+!plugins/dsh-client-ui-desktop-plugins/lib/*
 dist/
 deploy/
 deploy-stale-*/

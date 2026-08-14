@@ -44,10 +44,21 @@ const pluginsBridge = Object.freeze({
   setEnabled: (name, enabled) => ipcRenderer.invoke('dsh-desktop:plugins:set-enabled', name, enabled),
   import: (sourceDir) => ipcRenderer.invoke('dsh-desktop:plugins:import', sourceDir),
   remove: (name) => ipcRenderer.invoke('dsh-desktop:plugins:remove', name),
+  // Native folder picker; resolves the chosen absolute path (undefined when cancelled).
+  pickDirectory: () => ipcRenderer.invoke('dsh-desktop:plugins:pick-directory'),
+})
+
+// Compaction-threshold settings bridge: the `compaction` namespace is
+// desktop-owned and not part of the web configuration boundary, so these
+// round-trip through the main process to the host settings service.
+const settingsBridge = Object.freeze({
+  getCompactionThreshold: () => ipcRenderer.invoke('dsh-desktop:settings:compaction-threshold'),
+  setCompactionThreshold: (ratio) => ipcRenderer.invoke('dsh-desktop:settings:compaction-threshold-set', ratio),
 })
 
 contextBridge.exposeInMainWorld('dshDesktop', Object.freeze({
   isDesktop: true,
   platform: process.platform,
   plugins: pluginsBridge,
+  settings: settingsBridge,
 }))
