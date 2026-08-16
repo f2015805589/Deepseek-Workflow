@@ -1,0 +1,3 @@
+name: 极简模式（PowerShell）
+description: 与极简模式完全一致，仅将 Linux bash 工具替换为 Windows PowerShell（pwsh）。仅 pwsh 与 str_replace_editor 两个工具，固定系统提示词，无上下文压缩。
+order: 5

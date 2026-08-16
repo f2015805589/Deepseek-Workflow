@@ -2,6 +2,12 @@
   "plugins": {
     "dsh-client-ui-desktop-plugins": {
       "enabled": true
+    },
+    "dsh-client-ui-engineering-mode": {
+      "enabled": true
+    },
+    "dsh-preset-minimal-powershell": {
+      "enabled": true
     }
   }
 }

@@ -1,0 +1,20 @@
+{
+  "name": "dsh-client-ui-engineering-mode",
+  "description": "DeepSeek Workflow 工程模式插件：需求 → 极简模式（PowerShell）Plan 规划 → 自动拆分为队列/进行中/已完成看板任务 → 逐任务执行 → 结果合并验证。",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "client": {
+      "platform": "web"
+    }
+  },
+  "files": [
+    "lib"
+  ]
+}

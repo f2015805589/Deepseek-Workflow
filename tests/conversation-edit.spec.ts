@@ -10,7 +10,7 @@
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId } from '../../packages/core/session/lib/index.js'
 import {
-  applyConversationEdit, forkAnchorBeforeMessage, fsJournals, lineDiff, pendingFilesOf,
+  applyConversationEdit, diffHunks, forkAnchorBeforeMessage, fsJournals, lineDiff, parseGitStatusZ, pendingFilesOf,
 } from '../plugins/dsh-client-ui-desktop-plugins/lib/index.js'
 
 /** One completed turn: a user prompt and its assistant reply. */
@@ -194,6 +194,38 @@ describe('desktop file-changes panel diff and baseline aggregation', () => {
     expect(lineDiff('a\n', 'a\nb\n')).toEqual({ additions: 1, deletions: 0 })
     expect(lineDiff('a\nb\n', 'a\n')).toEqual({ additions: 0, deletions: 1 })
   })
+
+  it('renders unified hunks with add/del/context lines and bounded truncation', () => {
+    const diff = diffHunks('keep\nold\nend', 'keep\nnew\nend\nextra')
+    expect(diff.additions).toBe(2)
+    expect(diff.deletions).toBe(1)
+    expect(diff.truncated).toBe(false)
+    expect(diff.hunks).toHaveLength(1)
+    const kinds = diff.hunks[0].lines.map(line => line.kind)
+    expect(kinds).toEqual(['context', 'del', 'add', 'context', 'add'])
+    expect(diff.hunks[0].lines[1].text).toBe('old')
+    expect(diff.hunks[0].lines[2].text).toBe('new')
+  })
+
+  it('falls back to stats-only for oversized diffs', () => {
+    const largeOld = Array.from({ length: 900 }, (_, index) => `old-${index}`).join('\n')
+    const largeNew = Array.from({ length: 900 }, (_, index) => `new-${index}`).join('\n')
+    const diff = diffHunks(largeOld, largeNew)
+    expect(diff.truncated).toBe(true)
+    expect(diff.hunks).toEqual([])
+    expect(diff.additions).toBe(900)
+    expect(diff.deletions).toBe(900)
+  })
+
+  it('parses porcelain v1 -z output including rename entries', () => {
+    expect(parseGitStatusZ(' M src/a.ts\0?? new.txt\0R  old.txt\0new.txt\0')).toEqual([
+      { code: ' M', path: 'src/a.ts' },
+      { code: '??', path: 'new.txt' },
+      { code: 'R ', path: 'new.txt', origPath: 'old.txt' },
+    ])
+    expect(parseGitStatusZ('')).toEqual([])
+  })
+
 
   it('aggregates pending files with the EARLIEST turn winning as the baseline', () => {
     const journals = new Map()

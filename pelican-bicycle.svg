@@ -1,0 +1,167 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 600' role='img' aria-label='A pelican riding a bicycle'>
+  <defs>
+    <linearGradient id='sky' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#8ed4f5'/>
+      <stop offset='1' stop-color='#f2fbff'/>
+    </linearGradient>
+    <linearGradient id='body' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#ffffff'/>
+      <stop offset='1' stop-color='#e7eceb'/>
+    </linearGradient>
+    <linearGradient id='beakUpper' x1='0' y1='0' x2='1' y2='0'>
+      <stop offset='0' stop-color='#ffc35c'/>
+      <stop offset='1' stop-color='#f59e1b'/>
+    </linearGradient>
+    <linearGradient id='pouch' x1='0' y1='0' x2='0' y2='1'>
+      <stop offset='0' stop-color='#ffd078'/>
+      <stop offset='1' stop-color='#f59e1b'/>
+    </linearGradient>
+    <radialGradient id='sunGlow' cx='0.5' cy='0.5' r='0.5'>
+      <stop offset='0' stop-color='#fff3b0'/>
+      <stop offset='0.7' stop-color='#ffd93d'/>
+      <stop offset='1' stop-color='#ffc42e'/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x='0' y='0' width='800' height='600' fill='url(#sky)'/>
+
+  <!-- Sun -->
+  <g stroke='#ffd93d' stroke-width='4' stroke-linecap='round' opacity='0.75'>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(0 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(45 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(90 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(135 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(180 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(225 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(270 700 92)'/>
+    <line x1='700' y1='30' x2='700' y2='14' transform='rotate(315 700 92)'/>
+  </g>
+  <circle cx='700' cy='92' r='44' fill='url(#sunGlow)'/>
+
+  <!-- Clouds -->
+  <g fill='#ffffff' opacity='0.95'>
+    <ellipse cx='145' cy='104' rx='70' ry='25'/>
+    <ellipse cx='192' cy='86' rx='50' ry='21'/>
+    <ellipse cx='96' cy='90' rx='40' ry='17'/>
+    <ellipse cx='460' cy='68' rx='58' ry='21'/>
+    <ellipse cx='510' cy='54' rx='40' ry='16'/>
+  </g>
+
+  <!-- Ground -->
+  <rect x='0' y='520' width='800' height='80' fill='#8ed081'/>
+  <path d='M0,526 C140,508 260,536 400,524 C540,512 680,530 800,518 L800,600 L0,600 Z' fill='#79c068'/>
+
+  <!-- Soft shadow -->
+  <ellipse cx='400' cy='530' rx='232' ry='13' fill='#3f6b30' opacity='0.25'/>
+
+  <!-- Rear wheel -->
+  <g>
+    <circle cx='210' cy='455' r='75' fill='none' stroke='#2f3437' stroke-width='11'/>
+    <circle cx='210' cy='455' r='63' fill='none' stroke='#cfd4d8' stroke-width='5'/>
+    <circle cx='210' cy='455' r='8' fill='#5d6368'/>
+    <g stroke='#9ba2a8' stroke-width='2'>
+      <line x1='210' y1='396' x2='210' y2='514'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(22.5 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(45 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(67.5 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(90 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(112.5 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(135 210 455)'/>
+      <line x1='210' y1='396' x2='210' y2='514' transform='rotate(157.5 210 455)'/>
+    </g>
+  </g>
+
+  <!-- Front wheel -->
+  <g>
+    <circle cx='590' cy='455' r='75' fill='none' stroke='#2f3437' stroke-width='11'/>
+    <circle cx='590' cy='455' r='63' fill='none' stroke='#cfd4d8' stroke-width='5'/>
+    <circle cx='590' cy='455' r='8' fill='#5d6368'/>
+    <g stroke='#9ba2a8' stroke-width='2'>
+      <line x1='590' y1='396' x2='590' y2='514'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(22.5 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(45 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(67.5 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(90 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(112.5 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(135 590 455)'/>
+      <line x1='590' y1='396' x2='590' y2='514' transform='rotate(157.5 590 455)'/>
+    </g>
+  </g>
+
+  <!-- Drivetrain -->
+  <g stroke='#4a4f54' stroke-width='4' fill='none' opacity='0.9'>
+    <path d='M210,444 L365,430'/>
+    <path d='M210,466 L365,480'/>
+  </g>
+  <circle cx='210' cy='455' r='11' fill='#5d6368'/>
+  <circle cx='365' cy='455' r='26' fill='#5d6368'/>
+  <circle cx='365' cy='455' r='9' fill='#2f3437'/>
+
+  <!-- Far leg, crank and pedal (behind the bike frame) -->
+  <path d='M396,362 C402,382 405,408 408,430' fill='none' stroke='#e08a1a' stroke-width='10' stroke-linecap='round'/>
+  <path d='M414,422 L403,419 L399,430 L410,436 Z' fill='#f7a325' stroke='#e08a1a' stroke-width='2.5' stroke-linejoin='round'/>
+  <line x1='365' y1='455' x2='406' y2='430' stroke='#3d4246' stroke-width='7' stroke-linecap='round'/>
+  <rect x='396' y='423' width='30' height='10' rx='4' fill='#2f3437' transform='rotate(-30 411 428)'/>
+
+  <!-- Bicycle frame -->
+  <g stroke='#e2503a' stroke-width='10' stroke-linecap='round' stroke-linejoin='round' fill='none'>
+    <path d='M325,252 L365,455'/>
+    <path d='M325,252 L505,238'/>
+    <path d='M365,455 L505,332'/>
+    <path d='M505,238 L505,332'/>
+    <path d='M325,252 L210,455'/>
+    <path d='M365,455 L210,455'/>
+    <path d='M505,332 C532,372 558,414 590,455'/>
+  </g>
+
+  <!-- Handlebar and saddle -->
+  <line x1='505' y1='238' x2='528' y2='218' stroke='#6e767c' stroke-width='7' stroke-linecap='round'/>
+  <path d='M528,218 C548,196 572,194 586,200' fill='none' stroke='#3d4246' stroke-width='8' stroke-linecap='round'/>
+  <line x1='578' y1='198' x2='592' y2='202' stroke='#2f3437' stroke-width='11' stroke-linecap='round'/>
+  <line x1='326' y1='252' x2='320' y2='244' stroke='#7d858a' stroke-width='7' stroke-linecap='round'/>
+  <rect x='282' y='239' width='74' height='14' rx='7' fill='#2f3437' transform='rotate(-7 320 246)'/>
+
+  <!-- Near crank and pedal -->
+  <line x1='365' y1='455' x2='332' y2='488' stroke='#3d4246' stroke-width='7' stroke-linecap='round'/>
+  <rect x='316' y='483' width='32' height='10' rx='4' fill='#2f3437' transform='rotate(8 332 488)'/>
+
+  <!-- Pelican tail -->
+  <path d='M245,286 C215,266 190,262 170,275 C192,286 200,300 232,314 Z' fill='#eef1ee' stroke='#c9d2d5' stroke-width='3' stroke-linejoin='round'/>
+  <path d='M235,306 C205,300 182,302 166,314 C188,322 198,330 228,336 Z' fill='#e3e8e5' stroke='#c9d2d5' stroke-width='3' stroke-linejoin='round'/>
+
+  <!-- Pelican neck (outline then fill) -->
+  <path d='M392,262 C415,235 442,198 480,170 L502,192' fill='none' stroke='#c9d2d5' stroke-width='42' stroke-linecap='round'/>
+  <path d='M392,262 C415,235 442,198 480,170 L502,192' fill='none' stroke='url(#body)' stroke-width='36' stroke-linecap='round'/>
+
+  <!-- Pelican body -->
+  <path d='M235,292 C235,248 310,226 378,242 C438,258 458,288 446,332 C436,370 392,386 334,382 C278,378 235,336 235,292 Z'
+        fill='url(#body)' stroke='#c9d2d5' stroke-width='3' stroke-linejoin='round'/>
+
+  <!-- Pelican head -->
+  <ellipse cx='535' cy='150' rx='45' ry='38' fill='url(#body)' stroke='#c9d2d5' stroke-width='3'/>
+  <path d='M516,116 C522,104 538,102 550,110 C544,120 530,124 516,116 Z' fill='#ffffff' stroke='#c9d2d5' stroke-width='2.5' stroke-linejoin='round'/>
+
+  <!-- Beak and pouch -->
+  <path d='M562,130 C618,118 666,130 706,150 Q714,158 706,161 Q664,159 606,157 Q584,154 566,154 Z'
+        fill='url(#beakUpper)' stroke='#e08a1a' stroke-width='2.5' stroke-linejoin='round'/>
+  <path d='M560,160 Q612,163 650,168 Q670,204 655,228 Q636,250 604,235 Q579,224 558,194 Z'
+        fill='url(#pouch)' stroke='#e08a1a' stroke-width='2.5' stroke-linejoin='round'/>
+
+  <!-- Eye -->
+  <circle cx='544' cy='136' r='6' fill='#2f3437'/>
+  <circle cx='546' cy='134' r='2' fill='#ffffff'/>
+
+  <!-- Wing reaching the handlebar -->
+  <path d='M390,254 C420,228 468,208 522,200 L540,216 C500,232 452,254 422,276 C406,286 390,270 390,254 Z'
+        fill='#e2e7ea' stroke='#b4bec4' stroke-width='3' stroke-linejoin='round'/>
+  <path d='M402,264 C436,241 474,221 516,207' fill='none' stroke='#b4bec4' stroke-width='2.5'/>
+  <path d='M400,272 C432,251 470,233 510,219' fill='none' stroke='#b4bec4' stroke-width='2.5'/>
+  <path d='M522,201 L540,217 L530,220 Z' fill='#3d4246' opacity='0.7'/>
+
+  <!-- Near leg and webbed foot on the pedal -->
+  <path d='M348,366 C344,402 340,448 335,484' fill='none' stroke='#f7a325' stroke-width='10' stroke-linecap='round'/>
+  <path d='M338,487 C329,480 317,483 315,492 C314,499 325,502 338,498 Z'
+        fill='#f7a325' stroke='#e08a1a' stroke-width='2.5' stroke-linejoin='round'/>
+</svg>

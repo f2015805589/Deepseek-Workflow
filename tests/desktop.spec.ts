@@ -51,7 +51,7 @@ describe('dsh desktop surface', () => {
   })
 
   it('points the window at the built sandboxed preload', () => {
-    expect(desktopPreloadPath().replaceAll('\\', '/')).toMatch(/\/deepseek-desktop\/lib\/preload\.cjs$/)
+    expect(desktopPreloadPath().replaceAll('\\', '/')).toMatch(/\/(?:deepseek-desktop|Deepseek-Workflow)\/lib\/preload\.cjs$/)
   })
 
   it('constructs hardened window options', () => {

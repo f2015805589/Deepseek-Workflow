@@ -9,6 +9,8 @@
 import z from '@deepseek-ai/schemastery'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { unlinkSync } from 'node:fs'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 /** The durable compaction settings namespace (plain string: settingsNamespace is a brand-only passthrough). */
 export const COMPACTION_SETTINGS_NAMESPACE = settingsNamespace('compaction')
@@ -72,6 +74,107 @@ export function lineDiff(oldText, newText) {
   additions += m - j
   deletions += n - i
   return { additions, deletions }
+}
+
+
+/** Largest LCS DP this diff renderer will build before falling back to stats-only. */
+const DIFF_DP_CELL_CAP = 600_000
+
+/** Longest diff render output before truncating. */
+const DIFF_OPS_CAP = 6_000
+
+/**
+ * Unified-diff hunks for the right-side Git-style file changes panel.
+ */
+export function diffHunks(oldText, newText, context = 3) {
+  const a = String(oldText ?? '').split(/\r?\n/)
+  const b = String(newText ?? '').split(/\r?\n/)
+  if (a[a.length - 1] === '') a.pop()
+  if (b[b.length - 1] === '') b.pop()
+  const truncated = a.length * b.length > DIFF_DP_CELL_CAP
+  if (truncated) return { additions: b.length, deletions: a.length, truncated: true, hunks: [] }
+  if (a.length === 0 && b.length === 0) return { additions: 0, deletions: 0, truncated: false, hunks: [] }
+  const n = a.length
+  const m = b.length
+  const width = m + 1
+  const dp = new Uint32Array((n + 1) * width)
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      dp[i * width + j] = a[i] === b[j]
+        ? dp[(i + 1) * width + j + 1] + 1
+        : Math.max(dp[(i + 1) * width + j], dp[i * width + j + 1])
+    }
+  }
+  const ops = []
+  let i = 0
+  let j = 0
+  let additions = 0
+  let deletions = 0
+  while (i < n && j < m) {
+    if (a[i] === b[j]) {
+      ops.push({ kind: 'context', text: a[i] })
+      i++
+      j++
+    } else if (dp[(i + 1) * width + j] >= dp[i * width + j + 1]) {
+      ops.push({ kind: 'del', text: a[i] })
+      i++
+      deletions++
+    } else {
+      ops.push({ kind: 'add', text: b[j] })
+      j++
+      additions++
+    }
+    if (ops.length >= DIFF_OPS_CAP && (i < n || j < m)) return { additions, deletions, truncated: true, hunks: [] }
+  }
+  while (i < n) {
+    ops.push({ kind: 'del', text: a[i] })
+    i++
+    deletions++
+    if (ops.length >= DIFF_OPS_CAP) return { additions, deletions, truncated: true, hunks: [] }
+  }
+  while (j < m) {
+    ops.push({ kind: 'add', text: b[j] })
+    j++
+    additions++
+    if (ops.length >= DIFF_OPS_CAP) return { additions, deletions, truncated: true, hunks: [] }
+  }
+  const changed = new Set()
+  ops.forEach((op, index) => { if (op.kind !== 'context') changed.add(index) })
+  const hunks = []
+  let cursor = 0
+  while (cursor < ops.length) {
+    let nextChange = cursor
+    while (nextChange < ops.length && !changed.has(nextChange)) nextChange++
+    if (nextChange >= ops.length) break
+    const start = Math.max(0, nextChange - context)
+    let end = nextChange
+    while (end < ops.length && changed.has(end)) end++
+    end = Math.min(ops.length, end + context)
+    hunks.push({ lines: ops.slice(start, end) })
+    cursor = end
+  }
+  return { additions, deletions, truncated: false, hunks }
+}
+
+/** Parse git status --porcelain=v1 -z. Renames report the NEW path as path. */
+export function parseGitStatusZ(output) {
+  const parts = String(output ?? '').split('\0')
+  const entries = []
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index]
+    if (part === undefined || part.length < 4) continue
+    const code = part.slice(0, 2)
+    const path = part.slice(3)
+    if (path === '') continue
+    const next = parts[index + 1]
+    if ((code.startsWith('R') || code.startsWith('C')) && next !== undefined && next !== '') {
+      entries.push({ code, path: next, origPath: path })
+      index++
+    } else {
+      entries.push({ code, path })
+    }
+  }
+  return entries
 }
 
 /**
@@ -227,7 +330,11 @@ export function apply(ctx) {
   // The map itself lives at module level (fsJournals) so the pure aggregation
   // helpers are unit-testable; this apply binds the local name for brevity.
   const journals = fsJournals
-  /** sessionId -> current turn index, advanced on user/message events. */
+  /** sessionId -> { cwd, files } for Git-backed pending changes. */
+  const gitPending = new Map()
+  const gitKept = new Map()
+  const execFileAsync = promisify(execFile)
+  /** sessionId -> current turn index, advanced on turn/start events. */
   const turnBySession = new Map()
   /** True while the revert gateway is writing restored content back. */
   let restoring = false
@@ -280,19 +387,25 @@ export function apply(ctx) {
   }
 
   // Transparent waterfall participants: snapshot, then compose (`return next()`)
-  // so policy listeners and the write itself are untouched.
+  // so policy listeners and the write itself are untouched. `fs/write-intent`
+  // and `fs/edit-intent` are single-slot waterfalls: the base composition's
+  // observation-policy listener deliberately does NOT call next(), so these
+  // journal listeners must be prepended. Otherwise every registered policy
+  // vetoes the rest of the chain and non-git workspaces never record a file.
   ctx.on('fs/write-intent', async (target, actor, next) => {
     await snapshotFile(target, actor)
     return next()
-  })
+  }, true)
   ctx.on('fs/edit-intent', async (target, actor, next) => {
     await snapshotFile(target, actor)
     return next()
-  })
+  }, true)
 
-  // Advance the per-session turn counter on each human prompt.
+  // Advance the per-session turn counter from the turn boundary. The
+  // `user/message` payload carries no turn number; `turn/start` is the event
+  // that owns it and always precedes the turn's tool calls.
   ctx.on('session/event', (session, event) => {
-    if (event.type !== 'user/message') return
+    if (event.type !== 'turn/start') return
     const turn = event.data?.turn
     if (typeof turn === 'number') turnBySession.set(session.id, turn)
   })
@@ -363,62 +476,238 @@ export function apply(ctx) {
   // lines; 保存 accepts the current state (drops the pending entry), 撤销
   // restores the baseline.
 
-  /** Summarize one session's pending file changes with diff stats. */
-  async function changesList(sessionId) {
+  function normalizeSessionRequests(value) {
+    const items = Array.isArray(value) ? value : [value]
+    return items.map(item => {
+      if (typeof item === 'string') return { sessionId: item, cwd: '' }
+      if (item && typeof item === 'object' && typeof item.sessionId === 'string' && item.sessionId.length > 0) {
+        return { sessionId: item.sessionId, cwd: typeof item.cwd === 'string' ? item.cwd : '' }
+      }
+      throw new Error('dsh desktop: invalid session request')
+    }).filter(item => item.sessionId !== '')
+  }
+
+  function sessionCwd(sessionId) {
+    try {
+      const store = ctx.get('sessions')
+      const session = typeof store?.get === 'function' ? store.get(sessionId) : undefined
+      const cwd = session?.header?.cwd
+      return typeof cwd === 'string' && cwd !== '' ? cwd : undefined
+    } catch {
+      return undefined
+    }
+  }
+
+  async function gitShowHead(cwd, rel) {
+    const { stdout } = await execFileAsync('git', ['-C', cwd, 'show', 'HEAD:' + rel], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 })
+    return stdout
+  }
+
+  async function refreshGitPending(sessionId, cwd) {
+    let output = ''
+    try {
+      const result = await execFileAsync('git', ['-C', cwd, 'status', '--porcelain=v1', '-z'], { windowsHide: true, maxBuffer: 8 * 1024 * 1024 })
+      output = result.stdout ?? ''
+    } catch {
+      gitPending.delete(sessionId)
+      return
+    }
+    const entries = parseGitStatusZ(output)
+    const previous = gitPending.get(sessionId)
+    const files = new Map(previous?.files ?? [])
+    const kept = gitKept.get(sessionId) ?? new Set()
+    const seen = new Set()
+    for (const entry of entries) {
+      const rel = entry.path
+      seen.add(rel)
+      if (kept.has(rel) || files.has(rel)) continue
+      const code = entry.code
+      const untracked = code === '??'
+      const deleted = code[1] === 'D' || code === 'D '
+      const addedToIndex = code[0] === 'A'
+      let baseline = ''
+      let existed = false
+      if (deleted || (!untracked && !addedToIndex)) {
+        try {
+          baseline = await gitShowHead(cwd, rel)
+          existed = true
+        } catch {}
+      }
+      let target
+      try { target = await ctx.fs.resolve(rel, { cwd }) } catch { continue }
+      let path = rel
+      try { path = ctx.fs.processPath(target) } catch {}
+      files.set(rel, { target, path, rel, existed, content: baseline, worktreeDeleted: deleted, indexAdded: addedToIndex })
+    }
+    for (const rel of [...files.keys()]) { if (!seen.has(rel) && !kept.has(rel)) files.delete(rel) }
+    gitPending.set(sessionId, { cwd, files })
+  }
+
+  async function gitChangesRows(sessionId, cwd) {
+    await refreshGitPending(sessionId, cwd)
+    const state = gitPending.get(sessionId)
+    if (state === undefined) return []
     const rows = []
-    for (const [targetKey, snapshot] of pendingFilesOf(journals, sessionId)) {
+    for (const [rel, snapshot] of state.files) {
       let current = ''
-      let currentExists = true
+      let currentExists = !snapshot.worktreeDeleted
       try {
         const info = await ctx.fs.stat(snapshot.target)
-        if (info === undefined) {
-          currentExists = false
-        } else {
-          current = await ctx.fs.readText(snapshot.target)
-        }
-      } catch {
-        currentExists = false
-      }
-      const { additions, deletions } = lineDiff(
-        snapshot.existed ? snapshot.content : '',
-        current,
-      )
+        if (info === undefined) currentExists = false
+        else current = await ctx.fs.readText(snapshot.target)
+      } catch { currentExists = false }
+      const oldText = snapshot.existed ? snapshot.content : ''
+      const { additions, deletions } = lineDiff(oldText, current)
       if (additions === 0 && deletions === 0) continue
       rows.push({
-        targetKey,
-        path: snapshot.path ?? String(targetKey),
+        targetKey: 'git:' + sessionId + ':' + rel,
+        path: snapshot.path || rel,
         existed: snapshot.existed,
         currentExists,
         additions,
         deletions,
+        diff: diffHunks(oldText, current, 3),
       })
     }
+    rows.sort((left, right) => String(left.path).localeCompare(String(right.path)))
+    return rows
+  }
+
+  async function revertGitFile(sessionId, rel) {
+    const state = gitPending.get(sessionId)
+    const snapshot = state?.files.get(rel)
+    if (snapshot === undefined) return { ok: false, error: 'file-not-found' }
+    const cwd = state.cwd
+    try {
+      if (snapshot.existed) {
+        await execFileAsync('git', ['-C', cwd, 'checkout', 'HEAD', '--', rel], { windowsHide: true })
+      } else {
+        if (snapshot.indexAdded === true) {
+          try { await execFileAsync('git', ['-C', cwd, 'restore', '--staged', '--', rel], { windowsHide: true }) } catch {}
+        }
+        if (snapshot.path !== undefined) unlinkSync(snapshot.path)
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+    state.files.delete(rel)
+    return { ok: true }
+  }
+
+  function saveGitFile(sessionId, rel) {
+    const state = gitPending.get(sessionId)
+    if (state?.files.delete(rel) !== true) return { ok: false, error: 'file-not-found' }
+    const kept = gitKept.get(sessionId) ?? new Set()
+    kept.add(rel)
+    gitKept.set(sessionId, kept)
+    return { ok: true }
+  }
+
+  async function revertAllGitFiles(sessionId) {
+    const state = gitPending.get(sessionId)
+    if (state === undefined) return 0
+    let restored = 0
+    for (const rel of [...state.files.keys()]) {
+      const result = await revertGitFile(sessionId, rel)
+      if (result.ok) restored++
+    }
+    return restored
+  }
+
+  function saveAllGitFiles(sessionId) {
+    const state = gitPending.get(sessionId)
+    if (state === undefined) return
+    const kept = gitKept.get(sessionId) ?? new Set()
+    for (const rel of state.files.keys()) kept.add(rel)
+    gitKept.set(sessionId, kept)
+    state.files.clear()
+  }
+
+  /** Summarize pending file changes across one or more sessions (fs journal + git). */
+  async function changesList(sessionIds) {
+    const requests = normalizeSessionRequests(sessionIds)
+    const byPath = new Map()
+    for (const request of requests) {
+      const ownerSessionId = request.sessionId
+      for (const [targetKey, snapshot] of pendingFilesOf(journals, ownerSessionId)) {
+        let current = ''
+        let currentExists = true
+        try {
+          const info = await ctx.fs.stat(snapshot.target)
+          if (info === undefined) currentExists = false
+          else current = await ctx.fs.readText(snapshot.target)
+        } catch { currentExists = false }
+        const { additions, deletions } = lineDiff(snapshot.existed ? snapshot.content : '', current)
+        if (additions === 0 && deletions === 0) continue
+        const path = snapshot.path ?? String(targetKey)
+        if (!byPath.has(path)) {
+          byPath.set(path, {
+            targetKey: 'fs:' + ownerSessionId + ':' + targetKey,
+            path,
+            existed: snapshot.existed,
+            currentExists,
+            additions,
+            deletions,
+            diff: diffHunks(snapshot.existed ? snapshot.content : '', current, 3),
+          })
+        }
+      }
+      const cwd = sessionCwd(ownerSessionId) ?? request.cwd
+      if (cwd !== undefined && cwd !== '') {
+        try {
+          for (const row of await gitChangesRows(ownerSessionId, cwd)) {
+            if (!byPath.has(row.path)) byPath.set(row.path, row)
+          }
+        } catch {}
+      }
+    }
+    const rows = [...byPath.values()]
     rows.sort((left, right) => String(left.path).localeCompare(String(right.path)))
     return { ok: true, rows }
   }
 
   /** Restore one file to its pre-change baseline and drop its pending entries. */
   async function revertFile(sessionId, targetKey) {
-    const snapshot = pendingFilesOf(journals, sessionId).get(targetKey)
+    let ownerSessionId = sessionId
+    let rawKey = targetKey
+    if (String(targetKey).startsWith('git:')) {
+      const encoded = String(targetKey).slice(4)
+      const sep = encoded.indexOf(':')
+      if (sep !== -1) { ownerSessionId = encoded.slice(0, sep); rawKey = encoded.slice(sep + 1) }
+      return revertGitFile(ownerSessionId, rawKey)
+    }
+    if (String(targetKey).startsWith('fs:')) {
+      const encoded = String(targetKey).slice(3)
+      const sep = encoded.indexOf(':')
+      if (sep !== -1) { ownerSessionId = encoded.slice(0, sep); rawKey = encoded.slice(sep + 1) }
+    }
+    const snapshot = pendingFilesOf(journals, ownerSessionId).get(rawKey)
     if (!snapshot) return { ok: false, error: 'file-not-found' }
     restoring = true
     try {
-      if (snapshot.existed) {
-        await ctx.fs.writeText(snapshot.target, snapshot.content)
-      } else if (snapshot.path !== undefined) {
-        // The file did not exist before the session touched it: revert = delete it.
-        unlinkSync(snapshot.path)
-      }
-    } finally {
-      restoring = false
-    }
-    dropFileEntries(sessionId, targetKey)
+      if (snapshot.existed) await ctx.fs.writeText(snapshot.target, snapshot.content)
+      else if (snapshot.path !== undefined) unlinkSync(snapshot.path)
+    } finally { restoring = false }
+    dropFileEntries(ownerSessionId, rawKey)
     return { ok: true }
   }
 
   /** Accept one file's current state: drop its pending entries (no disk write). */
   function saveFile(sessionId, targetKey) {
-    return dropFileEntries(sessionId, targetKey)
+    let ownerSessionId = sessionId
+    let rawKey = targetKey
+    if (String(targetKey).startsWith('git:')) {
+      const encoded = String(targetKey).slice(4)
+      const sep = encoded.indexOf(':')
+      if (sep !== -1) { ownerSessionId = encoded.slice(0, sep); rawKey = encoded.slice(sep + 1) }
+      return saveGitFile(ownerSessionId, rawKey)
+    }
+    if (String(targetKey).startsWith('fs:')) {
+      const encoded = String(targetKey).slice(3)
+      const sep = encoded.indexOf(':')
+      if (sep !== -1) { ownerSessionId = encoded.slice(0, sep); rawKey = encoded.slice(sep + 1) }
+    }
+    return dropFileEntries(ownerSessionId, rawKey)
       ? { ok: true }
       : { ok: false, error: 'file-not-found' }
   }
@@ -437,34 +726,37 @@ export function apply(ctx) {
     return removed
   }
 
-  /** Restore every pending file to its pre-change baseline and clear the journal. */
-  async function revertAllFiles(sessionId) {
-    const snapshots = [...pendingFilesOf(sessionId).values()]
-    restoring = true
+  /** Restore every pending file across every requested session. */
+  async function revertAllFiles(sessionIds) {
+    const requests = normalizeSessionRequests(sessionIds)
     let restored = 0
-    try {
-      for (const snapshot of snapshots) {
-        try {
-          if (snapshot.existed) {
-            await ctx.fs.writeText(snapshot.target, snapshot.content)
-          } else if (snapshot.path !== undefined) {
-            unlinkSync(snapshot.path)
-          }
-          restored += 1
-        } catch {
-          // The user may have moved or deleted a file since; keep going.
+    for (const request of requests) {
+      const id = request.sessionId
+      const snapshots = [...pendingFilesOf(journals, id).values()]
+      restoring = true
+      try {
+        for (const snapshot of snapshots) {
+          try {
+            if (snapshot.existed) await ctx.fs.writeText(snapshot.target, snapshot.content)
+            else if (snapshot.path !== undefined) unlinkSync(snapshot.path)
+            restored += 1
+          } catch {}
         }
-      }
-    } finally {
-      restoring = false
+      } finally { restoring = false }
+      journals.delete(id)
+      restored += await revertAllGitFiles(id)
     }
-    journals.delete(sessionId)
     return { ok: true, restored }
   }
 
-  /** Accept every pending change: clear the session journal (no disk write). */
-  function saveAllFiles(sessionId) {
-    journals.delete(sessionId)
+  /** Accept every pending change across every requested session. */
+  function saveAllFiles(sessionIds) {
+    const requests = normalizeSessionRequests(sessionIds)
+    for (const request of requests) {
+      const id = request.sessionId
+      saveAllGitFiles(id)
+      journals.delete(id)
+    }
     return { ok: true }
   }
 
@@ -472,7 +764,12 @@ export function apply(ctx) {
   // plugin runs inside the desktop main's profile boot). Under plain-Node
   // probe/e2e boots the electron package resolves to its binary-path shim:
   // the journal still works, only the IPC handlers are skipped.
-  import('electron').then(({ ipcMain }) => {
+  import('electron').then((electron) => {
+    const ipcMain = electron && electron.ipcMain
+    // Plain-Node probe/e2e boots resolve the electron package to its
+    // binary-path shim (no ipcMain): the journal still works, the IPC
+    // handlers are skipped.
+    if (!ipcMain || typeof ipcMain.handle !== 'function') return
     ipcMain.handle('dsh-desktop:fs-revert:list', (_event, sessionId) => listTurns(sessionId))
     ipcMain.handle('dsh-desktop:fs-revert:apply', (_event, sessionId, fromTurn, toTurn) => {
       if (typeof sessionId !== 'string' || sessionId.length === 0
@@ -481,25 +778,35 @@ export function apply(ctx) {
       }
       return revertSession(sessionId, fromTurn, typeof toTurn === 'number' ? toTurn : fromTurn)
     })
-    const requireSessionId = (value) => {
-      if (typeof value !== 'string' || value.length === 0) {
-        throw new Error('dsh desktop: invalid session payload')
+      const requireSessionId = (value) => {
+        if (typeof value !== 'string' || value.length === 0) {
+          throw new Error('dsh desktop: invalid session payload')
+        }
+        return value
       }
-      return value
-    }
+        const requireSessionIds = (value) => {
+          const items = Array.isArray(value) ? value : [value]
+          return items.map(item => {
+            if (typeof item === 'string') return { sessionId: item, cwd: '' }
+            if (item && typeof item === 'object' && typeof item.sessionId === 'string' && item.sessionId.length > 0) {
+              return { sessionId: item.sessionId, cwd: typeof item.cwd === 'string' ? item.cwd : '' }
+            }
+            throw new Error('dsh desktop: invalid session-id list')
+          })
+        }
     const requireFileId = (value) => {
       if (typeof value !== 'string' || value.length === 0) {
         throw new Error('dsh desktop: invalid file payload')
       }
       return value
     }
-    ipcMain.handle('dsh-desktop:fs-changes:list', (_event, sessionId) => changesList(requireSessionId(sessionId)))
+      ipcMain.handle('dsh-desktop:fs-changes:list', (_event, sessionIds) => changesList(requireSessionIds(sessionIds)))
     ipcMain.handle('dsh-desktop:fs-changes:revert', (_event, sessionId, targetKey) =>
       revertFile(requireSessionId(sessionId), requireFileId(targetKey)))
     ipcMain.handle('dsh-desktop:fs-changes:save', (_event, sessionId, targetKey) =>
       saveFile(requireSessionId(sessionId), requireFileId(targetKey)))
-    ipcMain.handle('dsh-desktop:fs-changes:revert-all', (_event, sessionId) => revertAllFiles(requireSessionId(sessionId)))
-    ipcMain.handle('dsh-desktop:fs-changes:save-all', (_event, sessionId) => saveAllFiles(requireSessionId(sessionId)))
+      ipcMain.handle('dsh-desktop:fs-changes:revert-all', (_event, sessionIds) => revertAllFiles(requireSessionIds(sessionIds)))
+      ipcMain.handle('dsh-desktop:fs-changes:save-all', (_event, sessionIds) => saveAllFiles(requireSessionIds(sessionIds)))
     ipcMain.handle('dsh-desktop:conversation-edit:apply', (_event, sessionId, messageId, text) => {
       if (typeof sessionId !== 'string' || sessionId.length === 0
         || typeof messageId !== 'string' || messageId.length === 0

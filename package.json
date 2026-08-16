@@ -16,7 +16,7 @@
     "config"
   ],
   "scripts": {
-    "build": "tsdown && node scripts/copy-preload.mjs && node scripts/ensure-cli-runtime.mjs",
+    "build": "tsc -b tsconfig.json && tsdown && node scripts/copy-preload.mjs && node scripts/ensure-cli-runtime.mjs",
     "start": "pnpm run build && electron .",
     "package": "package.bat"
   },

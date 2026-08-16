@@ -17,6 +17,8 @@ window.__ModuleLoader__.load({
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		const React = require("react");
 		const { useCallback, useEffect, useRef, useState } = React;
+		const ReactDOM = require("react-dom");
+
 
 		/** The tab's stable slot id inside the Plugins settings section. */
 		const TAB_ID = "desktop-custom";
@@ -96,20 +98,20 @@ window.__ModuleLoader__.load({
 			alignItems: "center",
 			gap: "10px",
 			padding: "10px 12px",
-			border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+			border: "1px solid var(--dsw-alias-border-l2)",
 			borderRadius: "8px",
 			margin: "6px 0",
 		};
 		const nameStyle = { fontWeight: 600, flex: "1 1 auto", minWidth: 0 };
-		const mutedStyle = { color: "var(--dsw-text-muted, #8b8b93)", fontSize: "12px" };
+		const mutedStyle = { color: "var(--dsw-alias-label-secondary)", fontSize: "12px" };
 		const buttonStyle = {
 			padding: "4px 10px",
 			borderRadius: "6px",
-			border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+			border: "1px solid var(--dsw-alias-border-l2)",
 			background: "transparent",
 			cursor: "pointer",
 		};
-		const dangerStyle = { ...buttonStyle, color: "#e5484d", borderColor: "rgba(229,72,77,.5)" };
+		const dangerStyle = { ...buttonStyle, color: "var(--dsw-alias-state-error-primary)", borderColor: "rgba(229,72,77,.5)" };
 
 		function PluginRow({ plugin, onToggle, onRemove, disabled }) {
 			return React.createElement(
@@ -206,10 +208,10 @@ window.__ModuleLoader__.load({
 				fontSize: "12px",
 				lineHeight: 1,
 				padding: "2px 6px",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRadius: "6px",
 				background: "transparent",
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 				cursor: "pointer",
 				whiteSpace: "nowrap",
 			};
@@ -224,14 +226,14 @@ window.__ModuleLoader__.load({
 						onClick: open,
 					},
 					React.createElement("span", null, "压缩 "),
-					React.createElement("span", { style: { fontWeight: 600, color: "var(--dsw-text, inherit)" } }, `${committed}%`),
+					React.createElement("span", { style: { fontWeight: 600, color: "var(--dsw-alias-label-primary)" } }, `${committed}%`),
 				);
 			}
 
 			return React.createElement(
 				"span",
 				{
-					style: { display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--dsw-text-muted, #8b8b93)", whiteSpace: "nowrap" },
+					style: { display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--dsw-alias-label-secondary)", whiteSpace: "nowrap" },
 					title: "自动压缩阈值（10%–90%）",
 					onBlur: handleBlur,
 				},
@@ -244,7 +246,7 @@ window.__ModuleLoader__.load({
 					step: THRESHOLD_STEP,
 					value: pct,
 					"aria-label": "自动压缩阈值（百分比）",
-					style: { width: "110px", accentColor: "var(--dsw-accent, #4d9fff)", verticalAlign: "middle" },
+					style: { width: "110px", accentColor: "var(--dsw-alias-brand-primary)", verticalAlign: "middle" },
 					onChange: commit,
 					onKeyDown: (event) => {
 						if (event.key === "Escape") close();
@@ -321,7 +323,7 @@ window.__ModuleLoader__.load({
 				body = React.createElement(
 					"div",
 					null,
-					React.createElement("p", { role: "alert", style: { color: "#e5484d" } }, `加载失败：${view.message}`),
+					React.createElement("p", { role: "alert", style: { color: "var(--dsw-alias-state-error-primary)" } }, `加载失败：${view.message}`),
 				);
 			} else {
 				const custom = view.payload.plugins;
@@ -352,7 +354,7 @@ window.__ModuleLoader__.load({
 					notice.text !== ""
 						? React.createElement(
 								"p",
-								{ style: { ...mutedStyle, color: notice.kind === "err" ? "#e5484d" : undefined } },
+								{ style: { ...mutedStyle, color: notice.kind === "err" ? "var(--dsw-alias-state-error-primary)" : undefined } },
 								notice.text,
 							)
 						: null,
@@ -618,13 +620,13 @@ window.__ModuleLoader__.load({
 				wordBreak: "break-word",
 			};
 			const clickableBubbleStyle = editable
-				? { cursor: "pointer", outline: hover ? "1px solid var(--dsw-border, rgba(128,128,128,.55))" : "none" }
+				? { cursor: "pointer", outline: hover ? "1px solid var(--dsw-alias-border-l3)" : "none" }
 				: {};
 			const rowStyle = { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" };
 			const editorBoxStyle = {
 				width: "100%",
 				background: "var(--dsw-input-bg, transparent)",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRadius: "12px",
 				overflow: "hidden",
 			};
@@ -633,7 +635,7 @@ window.__ModuleLoader__.load({
 				minHeight: "120px",
 				boxSizing: "border-box",
 				background: "transparent",
-				color: "var(--dsw-text, inherit)",
+				color: "var(--dsw-alias-label-primary)",
 				border: "none",
 				outline: "none",
 				padding: "10px 14px",
@@ -648,12 +650,12 @@ window.__ModuleLoader__.load({
 				gap: "8px",
 				justifyContent: "flex-end",
 				padding: "6px 10px",
-				borderTop: "1px solid var(--dsw-border, rgba(128,128,128,.2))",
+				borderTop: "1px solid var(--dsw-alias-border-l1)",
 			};
 			const shortcutHintStyle = {
 				fontSize: "11px",
 				lineHeight: 1,
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 				marginRight: "auto",
 				whiteSpace: "nowrap",
 			};
@@ -661,16 +663,16 @@ window.__ModuleLoader__.load({
 				fontSize: "12px",
 				lineHeight: 1,
 				padding: "4px 12px",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRadius: "6px",
 				background: "transparent",
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 				cursor: "pointer",
 			};
 			const sendButtonStyle = {
 				...cancelButtonStyle,
-				color: "var(--dsw-accent, #4d9fff)",
-				borderColor: "var(--dsw-accent, #4d9fff)",
+				color: "var(--dsw-alias-brand-primary)",
+				borderColor: "var(--dsw-alias-brand-primary)",
 			};
 			const hintStyle = {
 				fontSize: "11px",
@@ -678,7 +680,7 @@ window.__ModuleLoader__.load({
 				padding: "0",
 				border: "none",
 				background: "transparent",
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 			};
 
 			if (editing) {
@@ -798,7 +800,7 @@ window.__ModuleLoader__.load({
 						border: "1px solid rgba(229,72,77,.5)",
 						borderRadius: "6px",
 						background: "transparent",
-						color: "#e5484d",
+						color: "var(--dsw-alias-state-error-primary)",
 						cursor: "pointer",
 					},
 					title: "撤销本轮修改的文件",
@@ -823,37 +825,167 @@ window.__ModuleLoader__.load({
 		}
 
 		/** Right-side "文件改动" dock (rides the frame-wide shell.overlay seat):
+
+		/** One Git-style file diff row: click to expand the unified diff. */
+		function FileDiffRow({ row, busy, expanded, onToggle, onRevert, onSave }) {
+			const name = basenameOf(row.path);
+			const dir = dirnameOf(row.path);
+			const diff = row.diff ?? { hunks: [], truncated: false };
+			const rowStyle = {
+				display: "flex",
+				alignItems: "center",
+				gap: "8px",
+				padding: "7px 8px",
+				borderBottom: "1px solid var(--dsw-alias-border-l1)",
+			};
+			const nameStyle = { flex: "1 1 auto", minWidth: 0, overflow: "hidden", cursor: "pointer" };
+			const fileNameStyle = { fontSize: "13px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+			const fileDirStyle = { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+			const statsStyle = { display: "flex", gap: "6px", flex: "none", fontSize: "12px", fontVariantNumeric: "tabular-nums" };
+			const addStyle = { color: "var(--dsw-alias-state-success-primary)", fontWeight: 600 };
+			const delStyle = { color: "var(--dsw-alias-state-error-primary)", fontWeight: 600 };
+			const smallButtonStyle = {
+				fontSize: "11px",
+				lineHeight: 1,
+				padding: "3px 8px",
+				border: "1px solid var(--dsw-alias-border-l2)",
+				borderRadius: "6px",
+				background: "transparent",
+				color: "var(--dsw-alias-label-secondary)",
+				cursor: "pointer",
+				whiteSpace: "nowrap",
+			};
+			const diffLineStyle = {
+				font: "11px/1.55 ui-monospace, SFMono-Regular, Consolas, monospace",
+				whiteSpace: "pre-wrap",
+				wordBreak: "break-all",
+				padding: "1px 8px",
+			};
+			const diffContainerStyle = {
+				margin: "2px 8px 8px 34px",
+				border: "1px solid var(--dsw-alias-border-l1)",
+				borderRadius: "8px",
+				background: "var(--dsw-alias-bg-layer-1)",
+				overflow: "auto",
+				maxHeight: "320px",
+			};
+			const kindStyle = {
+				context: { color: "var(--dsw-alias-label-secondary)" },
+				add: { color: "var(--dsw-alias-state-success-primary)", background: "var(--dsw-alias-state-success-tertiary)" },
+				del: { color: "var(--dsw-alias-state-error-primary)", background: "var(--dsw-alias-state-error-secondary)" },
+			};
+
+			return React.createElement(
+				"div",
+				{ style: { borderBottom: "1px solid var(--dsw-alias-border-l1)" }, title: row.path },
+				React.createElement(
+					"div",
+					{ style: rowStyle },
+					React.createElement(
+						"div",
+						{ style: nameStyle, onClick: onToggle },
+						React.createElement("div", { style: fileNameStyle }, name),
+						React.createElement("div", { style: fileDirStyle }, dir),
+					),
+					React.createElement(
+						"div",
+						{ style: statsStyle },
+						row.additions > 0 ? React.createElement("span", { style: addStyle }, `+${row.additions}`) : null,
+						row.deletions > 0 ? React.createElement("span", { style: delStyle }, `-${row.deletions}`) : null,
+					),
+					React.createElement("button", {
+						type: "button",
+						style: smallButtonStyle,
+						disabled: busy,
+						title: "撤回此文件的改动，还原到改动前",
+						onClick: onRevert,
+					}, "撤回"),
+					React.createElement("button", {
+						type: "button",
+						style: { ...smallButtonStyle, color: "var(--dsw-alias-brand-primary)" },
+						disabled: busy,
+						title: "保留此文件的改动（移出待处理列表）",
+						onClick: onSave,
+					}, "保留"),
+				),
+				expanded
+					? React.createElement(
+							"div",
+							{ style: diffContainerStyle },
+							diff.truncated
+								? React.createElement("div", { style: { ...diffLineStyle, color: "var(--dsw-alias-label-secondary)" } }, "文件过大，仅显示 +N / -N 统计。")
+								: (diff.hunks ?? []).map((hunk, hunkIndex) => React.createElement(
+									"div",
+									{ key: hunkIndex, style: { padding: "4px 0" } },
+									(hunk.lines ?? []).map((line, lineIndex) => React.createElement(
+										"div",
+										{
+											key: lineIndex,
+											style: { ...diffLineStyle, ...kindStyle[line.kind] },
+										},
+										`${line.kind === "add" ? "+" : line.kind === "del" ? "-" : " "} ${line.text}`,
+									)),
+								)),
+						)
+					: null,
+			);
+		}
+
+		/** Right-side "文件改动" dock (rides the frame-wide shell.overlay seat):
+
 		 *  the current session's pending file changes, top to bottom, each with
-		 *  +N (green) / -N (red) line stats, per-file 撤销/保存, and a top-level
-		 *  一键撤销 / 一键保存. Only appears while the current session has
+		 *  +N (green) / -N (red) line stats, per-file 撤回/保留, and a top-level
+		 *  一键撤回 / 一键保留. Only appears while the current session has
 		 *  pending changes; auto-opens on first appearance and collapses to a
 		 *  small tab. */
 		function FileChangesPanel({ useSessions }) {
 			const fsChanges = bridge() && window.dshDesktop.fsChanges;
 			const sessionId = useSessions ? useSessions(snapshot => snapshot.current) : undefined;
+			const currentSummary = useSessions ? useSessions(snapshot => sessionId === undefined ? undefined : snapshot.byId[sessionId]) : undefined;
+			const cwdBySession = useSessions ? useSessions(snapshot => snapshot.byId) : undefined;
+
 			const [rows, setRows] = useState(null);
 			const [open, setOpen] = useState(false);
 			const [busy, setBusy] = useState(false);
 			const [notice, setNotice] = useState("");
+			const [expanded, setExpanded] = useState({});
+			const [sessionIds, setSessionIds] = useState([]);
 
 			const refresh = useCallback(() => {
 				if (!fsChanges || !sessionId) { setRows(null); return; }
-				fsChanges.list(sessionId).then(
+				const engineeringIds = Array.isArray(window.dshEngineering?.sessionIds)
+					? window.dshEngineering.sessionIds.filter(id => typeof id === "string" && id !== "")
+					: [];
+				const ids = [...new Set([sessionId, ...engineeringIds])];
+				const requests = ids.map(id => ({
+					sessionId: id,
+					cwd: typeof cwdBySession?.[id]?.cwd === "string" ? cwdBySession[id].cwd : "",
+				}));
+				setSessionIds(requests);
+				fsChanges.list(requests).then(
 					(result) => {
 						setRows(result && result.ok === false ? null : (result && Array.isArray(result.rows) ? result.rows : []));
 					},
 					() => { setRows(null); },
 				);
-			}, [fsChanges, sessionId]);
+			}, [fsChanges, sessionId, cwdBySession]);
 
 			useEffect(() => {
 				refresh();
 				if (!fsChanges || !sessionId) return undefined;
 				const timer = window.setInterval(refresh, 2000);
-				return () => window.clearInterval(timer);
+				const onEngineeringChange = () => { refresh(); };
+				window.addEventListener("dsh-engineering-sessions-changed", onEngineeringChange);
+				return () => {
+					window.clearInterval(timer);
+					window.removeEventListener("dsh-engineering-sessions-changed", onEngineeringChange);
+				};
 			}, [refresh, fsChanges, sessionId]);
 
 			const pending = rows === null ? 0 : rows.length;
+			const engineeringOpen = window.dshEngineering?.open === true;
+			const blankConversation = currentSummary?.blank === true;
+			const showIdleTab = !blankConversation || engineeringOpen;
 
 			// Auto-open the dock when changes first appear (then let the user
 			// collapse it to the tab).
@@ -869,6 +1001,10 @@ window.__ModuleLoader__.load({
 			const flash = (text) => {
 				setNotice(text);
 				window.setTimeout(() => { setNotice(""); }, 3000);
+			};
+
+			const toggleExpanded = (targetKey) => {
+				setExpanded(prev => ({ ...prev, [targetKey]: !prev[targetKey] }));
 			};
 
 			const act = (promise) => {
@@ -890,41 +1026,41 @@ window.__ModuleLoader__.load({
 			const saveOne = (row) => { act(fsChanges.save(sessionId, row.targetKey)); };
 			const revertAll = () => {
 				if (!window.confirm(`撤销全部 ${pending} 个文件的修改？`)) return;
-				act(fsChanges.revertAll(sessionId));
+				act(fsChanges.revertAll(sessionIds));
 			};
-			const saveAll = () => { act(fsChanges.saveAll(sessionId)); };
+			const saveAll = () => { act(fsChanges.saveAll(sessionIds)); };
 
 			const panelStyle = {
 				position: "fixed",
-				top: "72px",
+				top: engineeringOpen ? "132px" : "72px",
 				right: "12px",
-				width: "340px",
-				maxHeight: "calc(100vh - 140px)",
+				width: "min(620px, calc(100vw - 320px))",
+				maxHeight: engineeringOpen ? "calc(100vh - 210px)" : "calc(100vh - 140px)",
 				display: "flex",
 				flexDirection: "column",
 				boxSizing: "border-box",
-				background: "var(--dsw-bg, #ffffff)",
-				color: "var(--dsw-text, inherit)",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				background: "var(--dsw-alias-bg-base)",
+				color: "var(--dsw-alias-label-primary)",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRadius: "12px",
 				boxShadow: "0 8px 28px rgba(0,0,0,.18)",
-				zIndex: 1200,
+				zIndex: 20000,
 				overflow: "hidden",
 				pointerEvents: "auto",
 			};
 			const tabStyle = {
 				position: "fixed",
-				top: "80px",
+				top: engineeringOpen ? "142px" : "80px",
 				right: "0",
-				zIndex: 1200,
+				zIndex: 20000,
 				fontSize: "12px",
 				lineHeight: 1,
 				padding: "8px 10px",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRight: "none",
 				borderRadius: "10px 0 0 10px",
-				background: "var(--dsw-bg, #ffffff)",
-				color: "var(--dsw-accent, #4d9fff)",
+				background: "var(--dsw-alias-bg-base)",
+				color: "var(--dsw-alias-brand-primary)",
 				cursor: "pointer",
 				pointerEvents: "auto",
 			};
@@ -933,7 +1069,7 @@ window.__ModuleLoader__.load({
 				alignItems: "center",
 				gap: "8px",
 				padding: "10px 12px",
-				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.2))",
+				borderBottom: "1px solid var(--dsw-alias-border-l1)",
 				flex: "none",
 			};
 			const headerTitleStyle = { fontWeight: 600, fontSize: "13px", marginRight: "auto", whiteSpace: "nowrap" };
@@ -944,7 +1080,7 @@ window.__ModuleLoader__.load({
 				border: "1px solid rgba(229,72,77,.5)",
 				borderRadius: "6px",
 				background: "transparent",
-				color: "#e5484d",
+				color: "var(--dsw-alias-state-error-primary)",
 				cursor: "pointer",
 				whiteSpace: "nowrap",
 			};
@@ -952,10 +1088,10 @@ window.__ModuleLoader__.load({
 				fontSize: "12px",
 				lineHeight: 1,
 				padding: "4px 10px",
-				border: "1px solid var(--dsw-accent, #4d9fff)",
+				border: "1px solid var(--dsw-alias-brand-primary)",
 				borderRadius: "6px",
 				background: "transparent",
-				color: "var(--dsw-accent, #4d9fff)",
+				color: "var(--dsw-alias-brand-primary)",
 				cursor: "pointer",
 				whiteSpace: "nowrap",
 			};
@@ -965,7 +1101,7 @@ window.__ModuleLoader__.load({
 				padding: "2px 6px",
 				border: "none",
 				background: "transparent",
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 				cursor: "pointer",
 			};
 			const rowStyle = {
@@ -973,44 +1109,48 @@ window.__ModuleLoader__.load({
 				alignItems: "center",
 				gap: "8px",
 				padding: "7px 8px",
-				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.12))",
+				borderBottom: "1px solid var(--dsw-alias-border-l1)",
 			};
 			const nameStyle = { flex: "1 1 auto", minWidth: 0, overflow: "hidden" };
 			const fileNameStyle = { fontSize: "13px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
-			const fileDirStyle = { fontSize: "11px", color: "var(--dsw-text-muted, #8b8b93)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
+			const fileDirStyle = { fontSize: "11px", color: "var(--dsw-alias-label-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 			const statsStyle = { display: "flex", gap: "6px", flex: "none", fontSize: "12px", fontVariantNumeric: "tabular-nums" };
-			const addStyle = { color: "#2f9e44", fontWeight: 600 };
-			const delStyle = { color: "#e5484d", fontWeight: 600 };
+			const addStyle = { color: "var(--dsw-alias-state-success-primary)", fontWeight: 600 };
+			const delStyle = { color: "var(--dsw-alias-state-error-primary)", fontWeight: 600 };
 			const smallButtonStyle = {
 				fontSize: "11px",
 				lineHeight: 1,
 				padding: "3px 8px",
-				border: "1px solid var(--dsw-border, rgba(128,128,128,.35))",
+				border: "1px solid var(--dsw-alias-border-l2)",
 				borderRadius: "6px",
 				background: "transparent",
-				color: "var(--dsw-text-muted, #8b8b93)",
+				color: "var(--dsw-alias-label-secondary)",
 				cursor: "pointer",
 				whiteSpace: "nowrap",
 			};
 			const noticeStyle = {
 				fontSize: "11px",
 				padding: "4px 12px",
-				borderBottom: "1px solid var(--dsw-border, rgba(128,128,128,.12))",
-				color: "#e5484d",
+				borderBottom: "1px solid var(--dsw-alias-border-l1)",
+				color: "var(--dsw-alias-state-error-primary)",
 				flex: "none",
 			};
 
-			if (!fsChanges || pending === 0) return null;
+			if (!fsChanges || sessionId === undefined || (pending === 0 && !showIdleTab)) return null;
 
 			if (!open) {
-				return React.createElement(
-					"button",
-					{ type: "button", style: tabStyle, title: "显示文件改动", onClick: () => setOpen(true) },
-					`改动 ${pending}`,
+				return ReactDOM.createPortal(
+					React.createElement(
+						"button",
+						{ type: "button", style: tabStyle, title: "显示文件改动", onClick: () => setOpen(true) },
+						`改动 ${pending}`,
+					),
+					document.body,
 				);
 			}
 
-			return React.createElement(
+			return ReactDOM.createPortal(
+				React.createElement(
 				"div",
 				{ style: panelStyle },
 				React.createElement(
@@ -1023,14 +1163,14 @@ window.__ModuleLoader__.load({
 						disabled: busy,
 						title: "把全部文件还原到改动前的状态",
 						onClick: revertAll,
-					}, "一键撤销"),
+					}, "一键撤回"),
 					React.createElement("button", {
 						type: "button",
 						style: okButtonStyle,
 						disabled: busy,
 						title: "保留全部改动（移出待处理列表）",
 						onClick: saveAll,
-					}, "一键保存"),
+					}, "一键保留"),
 					React.createElement("button", {
 						type: "button",
 						style: closeButtonStyle,
@@ -1044,45 +1184,24 @@ window.__ModuleLoader__.load({
 				React.createElement(
 					"div",
 					{ style: { flex: "1 1 auto", overflowY: "auto", padding: "4px 6px" } },
-					rows.map((row) => {
-						const name = basenameOf(row.path);
-						const dir = dirnameOf(row.path);
-						return React.createElement(
-							"div",
-							{ key: row.targetKey, style: rowStyle, title: row.path },
-							React.createElement(
-								"div",
-								{ style: nameStyle },
-								React.createElement("div", { style: fileNameStyle }, name),
-								React.createElement("div", { style: fileDirStyle }, dir),
-							),
-							React.createElement(
-								"div",
-								{ style: statsStyle },
-								row.additions > 0
-									? React.createElement("span", { style: addStyle }, `+${row.additions}`)
-									: null,
-								row.deletions > 0
-									? React.createElement("span", { style: delStyle }, `-${row.deletions}`)
-									: null,
-							),
-							React.createElement("button", {
-								type: "button",
-								style: smallButtonStyle,
-								disabled: busy,
-								title: "还原此文件到改动前的状态",
-								onClick: () => revertOne(row),
-							}, "撤销"),
-							React.createElement("button", {
-								type: "button",
-								style: { ...smallButtonStyle, color: "var(--dsw-accent, #4d9fff)" },
-								disabled: busy,
-								title: "保留此文件的改动（移出待处理列表）",
-								onClick: () => saveOne(row),
-							}, "保存"),
-						);
-					}),
+					(rows ?? []).length === 0
+						? React.createElement(
+								"p",
+								{ style: { ...mutedStyle, textAlign: "center", margin: "18px 0" } },
+								"暂无待处理的文件改动。Agent 修改工作区文件后，这里会显示 Git 差异。",
+							)
+						: (rows ?? []).map((row) => React.createElement(FileDiffRow, {
+							key: row.targetKey,
+							row,
+							busy,
+							expanded: expanded[row.targetKey] === true,
+							onToggle: () => toggleExpanded(row.targetKey),
+							onRevert: () => revertOne(row),
+							onSave: () => saveOne(row),
+						})),
 				),
+			),
+			document.body,
 			);
 		}
 

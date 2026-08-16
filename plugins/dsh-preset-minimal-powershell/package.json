@@ -1,0 +1,17 @@
+{
+  "name": "dsh-preset-minimal-powershell",
+  "description": "DeepSeek Workflow 自定义 agent preset 插件：完整复刻 shipped `minimal`（极简模式），仅将 Linux bash 工具替换为 Windows PowerShell（pwsh）。",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "agent.cordis.yml",
+    "preset.yml",
+    "README.md"
+  ]
+}
